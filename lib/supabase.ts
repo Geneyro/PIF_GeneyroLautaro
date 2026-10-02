@@ -8,12 +8,14 @@ export class ConfiguracionFaltanteError extends Error {}
  * Server Actions). Las credenciales nunca llegan al navegador.
  */
 export function getSupabase(): SupabaseClient {
-  const url = process.env.SUPABASE_URL;
-  const key = process.env.SUPABASE_ANON_KEY;
+  // Se aceptan ambos nombres: SUPABASE_* (local) y NEXT_PUBLIC_SUPABASE_* (Vercel).
+  // Este módulo es server-only, así que el valor no se incluye en el bundle del navegador.
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const key = process.env.SUPABASE_ANON_KEY ?? process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!url || !key) {
     throw new ConfiguracionFaltanteError(
-      'Faltan las variables SUPABASE_URL y/o SUPABASE_ANON_KEY. Copie .env.example como .env.local y complételo (ver README).',
+      'Faltan las variables SUPABASE_URL / SUPABASE_ANON_KEY (o NEXT_PUBLIC_SUPABASE_URL / NEXT_PUBLIC_SUPABASE_ANON_KEY). Ver README.',
     );
   }
 
