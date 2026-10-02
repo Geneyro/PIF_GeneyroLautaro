@@ -1,0 +1,7 @@
+# Nunca subir variables locales: en Vercel se usan las del proyecto
+.env*
+!.env.example
+node_modules
+.next
+supabase/.temp
+supabase/.branches

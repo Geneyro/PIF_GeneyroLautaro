@@ -8,6 +8,18 @@ El caso de uso vertical implementado es el **motor de fraccionamiento**: un bid�
 como 5.000 mL y solo puede fraccionarse en presentaciones de venta si las cantidades se conservan
 exactamente.
 
+### Producción
+
+| Componente | Enlace |
+|------------|--------|
+| Aplicación (Vercel) | <https://gfk-control-insumos.vercel.app> |
+| Base de datos (Supabase Cloud) | <https://supabase.com/dashboard/project/dglnfpusnecnvbhmeowf> |
+| Integración continua | <https://github.com/Geneyro/PIF_GeneyroLautaro/actions> |
+
+Para redesplegar: `npx supabase db push` (migraciones nuevas) y `npx vercel deploy --prod`.
+Variables de entorno en Vercel: `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`
+(Production y Preview). El archivo `.vercelignore` impide subir los `.env` locales.
+
 ---
 
 ## Índice

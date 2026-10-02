@@ -10,9 +10,9 @@ next-env.d.ts
 # certificados generados por `next dev --experimental-https`
 /certificates
 
-# variables de entorno (nunca se versionan)
-.env
-.env*.local
+# variables de entorno (nunca se versionan; solo la plantilla)
+.env*
+!.env.example
 
 # Supabase CLI
 supabase/.branches
