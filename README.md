@@ -4,39 +4,26 @@
 interfaz (Next.js 14), lógica transaccional (PL/pgSQL), persistencia (Supabase / PostgreSQL 15) y
 retorno de resultados, con integración continua en GitHub Actions.
 
+La aplicación está desplegada en **Vercel** y la base de datos en **Supabase Cloud**.
+
 El caso de uso vertical implementado es el **motor de fraccionamiento**: un bidón de 5 L se registra
 como 5.000 mL y solo puede fraccionarse en presentaciones de venta si las cantidades se conservan
 exactamente.
-
-### Producción
-
-| Componente | Enlace |
-|------------|--------|
-| Aplicación (Vercel) | <https://gfk-control-insumos.vercel.app> |
-| Base de datos (Supabase Cloud) | <https://supabase.com/dashboard/project/dglnfpusnecnvbhmeowf> |
-| Integración continua | <https://github.com/Geneyro/PIF_GeneyroLautaro/actions> |
-
-Para redesplegar: `npx supabase db push` (migraciones nuevas) y `npx vercel deploy --prod`.
-Variables de entorno en Vercel: `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABASE_ANON_KEY`
-(Production y Preview). El archivo `.vercelignore` impide subir los `.env` locales.
 
 ---
 
 ## Índice
 
 1. [Alcance funcional](#1-alcance-funcional)
-2. [Arquitectura y estructura del repositorio](#2-arquitectura-y-estructura-del-repositorio)
-3. [Requisitos previos](#3-requisitos-previos)
-4. [Puesta en marcha local (paso a paso)](#4-puesta-en-marcha-local-paso-a-paso)
-5. [Ejecutar el caso de prueba en la interfaz](#5-ejecutar-el-caso-de-prueba-en-la-interfaz)
-6. [Verificar la base de datos desde la terminal](#6-verificar-la-base-de-datos-desde-la-terminal)
-7. [Alternativa: usar Supabase Cloud](#7-alternativa-usar-supabase-cloud)
-8. [Cifrado de las comunicaciones (HTTPS)](#8-cifrado-de-las-comunicaciones-https)
-9. [Integración continua](#9-integración-continua)
-10. [Modelo de datos y lógica transaccional](#10-modelo-de-datos-y-lógica-transaccional)
-11. [Scripts disponibles](#11-scripts-disponibles)
-12. [Solución de problemas](#12-solución-de-problemas)
-13. [Servidor MCP de Supabase (asistentes de IA)](#13-servidor-mcp-de-supabase-asistentes-de-ia)
+2. [Arquitectura](#2-arquitectura)
+3. [Despliegue en producción](#3-despliegue-en-producción)
+4. [Probar el caso de prueba en producción](#4-probar-el-caso-de-prueba-en-producción)
+5. [Verificar la base de datos en Supabase Cloud](#5-verificar-la-base-de-datos-en-supabase-cloud)
+6. [Seguridad y cifrado (HTTPS)](#6-seguridad-y-cifrado-https)
+7. [Integración continua](#7-integración-continua)
+8. [Modelo de datos y lógica transaccional](#8-modelo-de-datos-y-lógica-transaccional)
+9. [Solución de problemas](#9-solución-de-problemas)
+10. [Enlaces](#10-enlaces)
 
 ---
 
@@ -49,7 +36,7 @@ Variables de entorno en Vercel: `NEXT_PUBLIC_SUPABASE_URL` y `NEXT_PUBLIC_SUPABA
 | **RF-01** | Fraccionamiento como transformación que conserva cantidades | `registrar_fraccionamiento()` + trigger de invariantes · formulario «4 · Fraccionamiento» |
 | **RF-04** | Consulta de saldo en unidad base | vistas `v_saldo_insumo`, `v_saldo_presentacion` · tabla «Saldos» |
 | **RF-05** | Inmutabilidad de movimientos | triggers `BEFORE UPDATE/DELETE/TRUNCATE` sobre `movimiento_stock` · botones *Editar/Eliminar* |
-| Seguridad | Cifrado de comunicaciones | HTTPS (Supabase Cloud, `next dev --experimental-https`, HSTS) |
+| Seguridad | Cifrado de comunicaciones | HTTPS en Vercel y Supabase Cloud + cabecera HSTS |
 
 Toda regla de negocio crítica vive **en la base de datos**: aunque se usara otro cliente distinto de
 la aplicación web, no sería posible registrar un fraccionamiento que no conserve cantidades ni
@@ -57,23 +44,25 @@ modificar un movimiento.
 
 ---
 
-## 2. Arquitectura y estructura del repositorio
+## 2. Arquitectura
 
 ```
  Navegador (PC / celular)
         │  HTTPS
         ▼
- Next.js 14 (App Router)
+ Vercel · Next.js 14 (App Router)
    ├─ app/page.tsx ............ Server Component: consulta saldos (RF-04)
    ├─ components/*.tsx ........ formularios (Client Components, useFormState)
    └─ app/actions.ts .......... Server Actions → supabase.rpc(...)
         │  HTTPS / PostgREST (clave pública, solo en el servidor)
         ▼
- Supabase · PostgreSQL 15
+ Supabase Cloud · PostgreSQL 15
    ├─ funciones PL/pgSQL ...... únicas vías de escritura (SECURITY DEFINER)
    ├─ triggers ................ inmutabilidad + invariantes de conservación
    └─ vistas .................. saldos en unidad base
 ```
+
+### Estructura del repositorio
 
 ```
 .
@@ -90,167 +79,132 @@ modificar un movimiento.
 │   ├── supabase.ts                   Cliente Supabase (solo servidor)
 │   └── types.ts
 ├── supabase/
-│   ├── config.toml                   Configuración del Supabase local (PostgreSQL 15)
+│   ├── config.toml                   Configuración del CLI de Supabase
 │   ├── migrations/
 │   │   └── 20261001000000_motor_fraccionamiento.sql   Esquema, funciones, triggers, vistas, permisos
 │   ├── tests/
 │   │   └── motor_fraccionamiento.test.sql             Test de aceptación en SQL
 │   └── ci/roles.sql                  Roles de Supabase para el Postgres del CI
 ├── .env.example                      Plantilla de variables de entorno
+├── .vercelignore                     Evita subir archivos .env al desplegar
 ├── next.config.mjs                   Cabeceras de seguridad (HSTS, etc.)
 └── package.json
 ```
 
 ---
 
-## 3. Requisitos previos
+## 3. Despliegue en producción
 
-| Herramienta | Versión | Para qué | Verificar con |
-|-------------|---------|----------|---------------|
-| **Node.js** | 20 LTS o superior | Ejecutar Next.js y el CLI de Supabase vía `npx` | `node -v` |
-| **npm** | 10 o superior (viene con Node) | Instalar dependencias | `npm -v` |
-| **Docker Desktop** | reciente, **en ejecución** | Supabase local corre en contenedores | `docker info` |
-| **Git** | cualquiera | Clonar el repositorio | `git --version` |
+### Requisitos
 
-> Descargas: Node.js → <https://nodejs.org> (versión LTS) · Docker Desktop → <https://www.docker.com/products/docker-desktop/>
->
-> En **Windows** abra Docker Desktop y espere a que indique *Engine running* antes de continuar.
-> Los comandos de esta guía funcionan en PowerShell, CMD, Git Bash, macOS y Linux salvo que se
-> indique lo contrario.
+| Necesario | Para qué |
+|-----------|----------|
+| Cuenta en [Supabase](https://supabase.com) con un proyecto creado | Base de datos PostgreSQL 15 en la nube |
+| Cuenta en [Vercel](https://vercel.com) | Alojar la aplicación Next.js |
+| Node.js 20 LTS o superior y Git | Ejecutar los CLIs (`npx supabase`, `npx vercel`) |
 
-No hace falta instalar el CLI de Supabase globalmente: viene como dependencia de desarrollo
-(`supabase` en `package.json`), se instala con `npm ci` y se ejecuta con `npx supabase ...`.
-
-> Windows: Node.js se puede instalar desde la terminal con
-> `winget install --id OpenJS.NodeJS.LTS -e` (luego abra una terminal nueva).
-
----
-
-## 4. Puesta en marcha local (paso a paso)
-
-### Paso 1 — Clonar el repositorio
+Clonar el repositorio e instalar dependencias (incluye el CLI de Supabase):
 
 ```bash
-git clone <URL-del-repositorio> PIF_GeneyroLautaro
+git clone https://github.com/Geneyro/PIF_GeneyroLautaro.git
 cd PIF_GeneyroLautaro
-```
-
-### Paso 2 — Instalar dependencias
-
-```bash
 npm ci
 ```
 
-`npm ci` instala exactamente las versiones fijadas en `package-lock.json` (Next.js 14.2, React 18,
-`@supabase/supabase-js` 2). Si prefiere, `npm install` también funciona.
+### 3.1 Base de datos en Supabase Cloud
 
-### Paso 3 — Levantar Supabase local (PostgreSQL 15)
+1. Iniciar sesión en el CLI (abre el navegador; también se puede usar un token personal de
+   <https://supabase.com/dashboard/account/tokens> con `npx supabase login --token <token>`):
 
-Con Docker Desktop en ejecución, desde la raíz del proyecto:
+   ```bash
+   npx supabase login
+   ```
 
-```bash
-npx supabase start
-```
+2. Vincular el repositorio con el proyecto remoto. El *Reference ID* está en
+   *Project Settings → General*; la contraseña es la de la base de datos del proyecto:
 
-- La **primera vez** descarga las imágenes de Docker (puede tardar varios minutos).
-- Al arrancar, **aplica automáticamente** la migración de `supabase/migrations/` (tablas,
-  funciones, triggers, vistas y permisos).
-- Al terminar imprime un resumen con las URLs y claves. Los datos relevantes son:
+   ```bash
+   npx supabase link --project-ref <reference-id> -p "<contraseña-de-la-base>"
+   ```
 
-| Dato | Valor local por defecto |
-|------|-------------------------|
-| API URL | `http://127.0.0.1:54321` |
-| DB URL | `postgresql://postgres:postgres@127.0.0.1:54322/postgres` |
-| Studio (panel web) | `http://127.0.0.1:54323` |
-| anon key / Publishable key | se muestra en pantalla (cadena larga) |
+3. Aplicar las migraciones (tablas, triggers de inmutabilidad, funciones PL/pgSQL, vistas y
+   permisos). Conviene revisar primero qué se aplicará con `--dry-run`:
 
-Puede volver a ver estos datos en cualquier momento con:
+   ```bash
+   npx supabase db push --dry-run
+   npx supabase db push
+   ```
 
-```bash
-npx supabase status
-```
+> Alternativa sin CLI: en el dashboard, *SQL Editor* → pegar el contenido completo de
+> `supabase/migrations/20261001000000_motor_fraccionamiento.sql` → *Run*.
 
-Para **reiniciar la base desde cero** (borra los datos y reaplica la migración):
+### 3.2 Aplicación en Vercel
 
-```bash
-npx supabase db reset
-```
+1. Iniciar sesión y vincular el proyecto:
 
-### Paso 4 — Configurar las variables de entorno
+   ```bash
+   npx vercel login
+   npx vercel link
+   ```
 
-Copie la plantilla:
+2. Definir las variables de entorno para **Production** y **Preview** (el CLI pide el valor):
 
-```bash
-# macOS / Linux / Git Bash
-cp .env.example .env.local
-```
+   ```bash
+   npx vercel env add NEXT_PUBLIC_SUPABASE_URL production
+   npx vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY production
+   npx vercel env add NEXT_PUBLIC_SUPABASE_URL preview
+   npx vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY preview
+   ```
 
-```powershell
-# Windows PowerShell
-Copy-Item .env.example .env.local
-```
+   | Variable | Valor | Dónde obtenerlo |
+   |----------|-------|-----------------|
+   | `NEXT_PUBLIC_SUPABASE_URL` | `https://<reference-id>.supabase.co` | *Project Settings → API* |
+   | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | clave *publishable* (`sb_publishable_…`) o *anon* | *Project Settings → API Keys* |
 
-Edite `.env.local` y complete:
+   También pueden cargarse desde el dashboard de Vercel: *Project → Settings → Environment
+   Variables*.
 
-| Variable | Valor en local | Valor en Supabase Cloud |
-|----------|----------------|-------------------------|
-| `SUPABASE_URL` | `http://127.0.0.1:54321` | `https://<ref-del-proyecto>.supabase.co` |
-| `SUPABASE_ANON_KEY` | la **anon key** (o **Publishable key**) que muestra `npx supabase status` | *Project Settings → API Keys* → anon / publishable |
+3. Desplegar a producción:
 
-Ejemplo de `.env.local` para entorno local:
+   ```bash
+   npx vercel deploy --prod
+   ```
 
-```dotenv
-SUPABASE_URL=http://127.0.0.1:54321
-SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9....   # copiar el valor completo
-```
+Notas:
 
-> Atajo: `npx supabase status -o env` imprime las variables en formato `CLAVE=valor`;
-> copie el valor de `ANON_KEY` (o `PUBLISHABLE_KEY`) en `SUPABASE_ANON_KEY` y el de `API_URL`
-> en `SUPABASE_URL`.
-
-Notas de seguridad:
-
-- Las variables **no** llevan el prefijo `NEXT_PUBLIC_`: solo se leen en el servidor (Server
-  Actions y Server Components) y nunca se envían al navegador.
+- Las variables se leen **solo en el servidor** (Server Actions y Server Components, en
+  `lib/supabase.ts`, marcado como `server-only`), por lo que no se incluyen en el código que
+  descarga el navegador.
 - Se usa la clave **pública** a propósito: con ella la aplicación solo puede *leer* tablas y
-  *ejecutar* las funciones del motor. No necesita (ni debe usar) la `service_role key`.
-- `.env.local` está en `.gitignore`: nunca se sube al repositorio.
+  *ejecutar* las funciones del motor. No necesita (ni debe usar) la `service_role` / `secret key`.
+- `.vercelignore` y `.gitignore` excluyen los archivos `.env*`: ninguna credencial se sube al
+  repositorio ni al despliegue.
 
-### Paso 5 — Iniciar el servidor de desarrollo
+### 3.3 Despliegue continuo (opcional)
+
+Para que cada *push* a `main` se despliegue automáticamente, conecte el repositorio en
+*Vercel → Project → Settings → Git* (requiere instalar la app de Vercel en GitHub). Mientras tanto,
+cada nueva versión se publica con:
 
 ```bash
-npm run dev
+npx supabase db push        # solo si hay migraciones nuevas
+npx vercel deploy --prod
 ```
 
-Abra <http://localhost:3000>. Para probar desde el celular en la misma red Wi-Fi, use
-`http://<IP-de-la-PC>:3000`.
+### 3.4 Versión entregada
 
-Versión con HTTPS local (ver [sección 8](#8-cifrado-de-las-comunicaciones-https)):
-
-```bash
-npm run dev:https      # → https://localhost:3000
-```
-
-### Paso 6 (opcional) — Build de producción
+La entrega de la Iteración 1 está marcada con la etiqueta anotada `v1`:
 
 ```bash
-npm run build
-npm start              # sirve el build en http://localhost:3000
-```
-
-### Detener todo
-
-```bash
-# Ctrl + C en la terminal de Next.js, y luego:
-npx supabase stop
+git checkout v1
 ```
 
 ---
 
-## 5. Ejecutar el caso de prueba en la interfaz
+## 4. Probar el caso de prueba en producción
 
-La pantalla incluye una guía desplegable «Caso de prueba de la Iteración 1». Pasos y resultados
-esperados:
+Abra la [aplicación en producción](#10-enlaces), desde la computadora o el celular. La pantalla
+incluye una guía desplegable «Caso de prueba de la Iteración 1». Pasos y resultados esperados:
 
 | # | Acción | Resultado esperado |
 |---|--------|--------------------|
@@ -258,35 +212,48 @@ esperados:
 | 2 | **Ingreso**: cantidad `5`, unidad `L` → *Registrar ingreso* | Vista previa «5 L = 5.000 mL». Mensaje con saldo a granel **5.000 mL**, consultado en la base. |
 | 3 | **Presentación**: nombre `Botella 1 L`, contenido `1` `L` → *Crear presentación* | La presentación queda con contenido 1.000 mL. |
 | 4 | **Fraccionamiento**: extraído `5000`, presentación *Botella 1 L*, unidades `4`, merma `0` → *Registrar fraccionamiento* | **Rechazado** por la base de datos: «Fraccionamiento rechazado: **hay 1000 mL no explicados**. Se extrajeron 5000 mL del granel, pero las presentaciones suman 4000 mL (4 × Botella 1 L) y la merma declarada es 0 mL.» El saldo no cambia. |
-| 5 | Cambiar unidades a `5` → *Registrar fraccionamiento* | **Confirmado**. Saldos persistidos: granel **0 mL**, presentaciones **5.000 mL** (5 botellas), total 5.000 mL. Recargar la página (F5) muestra los mismos valores: están en la base. |
+| 5 | Cambiar unidades a `5` → *Registrar fraccionamiento* | **Confirmado**. Saldos persistidos: granel **0 mL**, presentaciones **5.000 mL** (5 botellas), total 5.000 mL. Recargar la página muestra los mismos valores: están en la base. |
 | 6 | En **Movimientos de stock**, pulsar *Editar* o *Eliminar* en cualquier fila | **Rechazado**: «Movimiento_Stock es inmutable: no se permite UPDATE/DELETE sobre el movimiento #N.» |
 
-Casos adicionales que también se pueden probar: fraccionar 1.500 mL en 1 botella declarando
-500 mL de merma (se acepta y suma a *Merma acumulada*), producir más de lo extraído (rechazo «las
-salidas exceden en …») o extraer más que el saldo a granel (rechazo «Saldo a granel insuficiente»).
+Casos adicionales: fraccionar 1.500 mL en 1 botella declarando 500 mL de merma (se acepta y suma a
+*Merma acumulada*), producir más de lo extraído (rechazo «las salidas exceden en …») o extraer más
+que el saldo a granel (rechazo «Saldo a granel insuficiente»).
 
+> El nombre del insumo es único: si «Shampoo neutro» ya existe en producción, use otro nombre
+> (por ejemplo «Shampoo neutro 2») para repetir la prueba. Los movimientos no se pueden borrar.
+>
 > El recuadro de balance del formulario de fraccionamiento es solo una vista previa: el botón
 > envía igualmente el movimiento y **la decisión la toma la función PL/pgSQL**.
 
 ---
 
-## 6. Verificar la base de datos desde la terminal
+## 5. Verificar la base de datos en Supabase Cloud
+
+Abra el [dashboard del proyecto](#10-enlaces):
+
+- **Table Editor:** muestra `insumo`, `presentacion_venta` y `movimiento_stock` con los datos
+  cargados desde la aplicación.
+- **SQL Editor:** permite comprobar las reglas directamente:
+
+  ```sql
+  select * from v_saldo_insumo;                         -- RF-04: saldos en unidad base
+  update movimiento_stock set cantidad_base = 0;        -- RF-05 → ERROR: Movimiento_Stock es inmutable
+  delete from movimiento_stock;                         -- RF-05 → ERROR: Movimiento_Stock es inmutable
+  ```
+
+  El bloqueo aplica incluso al usuario `postgres` (dueño de la tabla), porque lo imponen triggers y
+  no solo permisos.
 
 ### Test de aceptación automatizado
 
 `supabase/tests/motor_fraccionamiento.test.sql` reproduce el caso de prueba completo dentro de una
-transacción que se revierte (no deja datos). Con Supabase local levantado:
+transacción que **se revierte al final** (no deja datos). Se ejecuta en cada corrida del CI y
+también puede lanzarse contra Supabase Cloud con `psql`, usando la cadena de conexión de
+*Connect → Session pooler* del dashboard:
 
 ```bash
-# Opción A: con psql instalado
-psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f supabase/tests/motor_fraccionamiento.test.sql
-
-# Opción B: sin psql, usando el contenedor de la base (macOS / Linux / Git Bash / CMD)
-docker exec -i supabase_db_gfk-insumos psql -U postgres -v ON_ERROR_STOP=1 < supabase/tests/motor_fraccionamiento.test.sql
+psql "<cadena-de-conexión>" -v ON_ERROR_STOP=1 -f supabase/tests/motor_fraccionamiento.test.sql
 ```
-
-> En PowerShell la redirección `<` no existe; use:
-> `Get-Content supabase/tests/motor_fraccionamiento.test.sql | docker exec -i supabase_db_gfk-insumos psql -U postgres -v ON_ERROR_STOP=1`
 
 Salida esperada (resumida):
 
@@ -298,62 +265,25 @@ NOTICE:  OK  RF-05  Movimiento_Stock es inmutable: no se permite UPDATE sobre el
 NOTICE:  ==> Todos los tests del motor de fraccionamiento pasaron.
 ```
 
-### Comprobación manual en Supabase Studio
+---
 
-Abra <http://127.0.0.1:54323> → *SQL Editor* y ejecute, por ejemplo:
+## 6. Seguridad y cifrado (HTTPS)
 
-```sql
-select * from v_saldo_insumo;                         -- RF-04
-update movimiento_stock set cantidad_base = 0;        -- RF-05 → ERROR: Movimiento_Stock es inmutable
-delete from movimiento_stock;                         -- RF-05 → ERROR: Movimiento_Stock es inmutable
-```
-
-El bloqueo aplica incluso al usuario `postgres` (dueño de la tabla), porque lo imponen triggers y no
-solo permisos.
+- **Navegador ↔ Vercel:** Vercel sirve la aplicación exclusivamente por HTTPS y redirige las
+  peticiones HTTP (308). `next.config.mjs` envía la cabecera `Strict-Transport-Security` (HSTS)
+  para que el navegador use siempre HTTPS, además de `X-Content-Type-Options`, `X-Frame-Options`,
+  `Referrer-Policy` y `Permissions-Policy`.
+- **Vercel ↔ Supabase:** la API de Supabase Cloud es `https://<reference-id>.supabase.co`; todo el
+  tráfico entre la aplicación y la base viaja cifrado con TLS.
+- **Credenciales:** la clave de Supabase solo existe en el servidor de Vercel; el navegador nunca la
+  recibe.
+- **Permisos en la base:** con la clave pública solo se puede leer y ejecutar las funciones del
+  motor; cualquier `INSERT`, `UPDATE` o `DELETE` directo sobre las tablas devuelve
+  `permission denied`.
 
 ---
 
-## 7. Alternativa: usar Supabase Cloud
-
-Si no puede usar Docker, la aplicación funciona igual contra un proyecto en la nube (PostgreSQL 15
-o superior):
-
-1. Cree un proyecto en <https://supabase.com/dashboard>.
-2. Aplique la migración, con **una** de estas opciones:
-   - **SQL Editor:** pegue el contenido completo de
-     `supabase/migrations/20261001000000_motor_fraccionamiento.sql` y pulse *Run*.
-   - **CLI:**
-     ```bash
-     npx supabase login
-     npx supabase link --project-ref <ref-del-proyecto>
-     npx supabase db push
-     ```
-3. En *Project Settings → API Keys* copie la URL del proyecto y la clave anon/publishable en
-   `.env.local` (ver paso 4).
-4. `npm run dev`.
-
-La URL de Supabase Cloud es `https://…`: la comunicación entre Next.js y la base viaja cifrada con
-TLS.
-
----
-
-## 8. Cifrado de las comunicaciones (HTTPS)
-
-- **Navegador ↔ Next.js:**
-  - Desarrollo: `npm run dev:https` levanta `https://localhost:3000` con un certificado local que
-    Next.js genera automáticamente (carpeta `certificates/`, ignorada por git). La primera vez
-    puede pedir permisos para instalar la autoridad certificante local.
-  - Producción: desplegar detrás de TLS (por ejemplo Vercel, que sirve HTTPS por defecto, o un
-    proxy inverso con certificado). `next.config.mjs` envía la cabecera
-    `Strict-Transport-Security` (HSTS) para que el navegador use siempre HTTPS, además de
-    `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy` y `Permissions-Policy`.
-- **Next.js ↔ Supabase:** en la nube la API es `https://<ref>.supabase.co`. En local la API
-  escucha en `127.0.0.1` (tráfico que no sale de la máquina).
-- Las credenciales de Supabase solo existen en el servidor; el navegador nunca las recibe.
-
----
-
-## 9. Integración continua
+## 7. Integración continua
 
 `.github/workflows/ci.yml` se ejecuta en cada *push* y *pull request* con dos jobs:
 
@@ -363,11 +293,11 @@ TLS.
 | **PostgreSQL 15 · migraciones y tests PL/pgSQL** | Levanta un servicio `postgres:15`, crea los roles de Supabase (`supabase/ci/roles.sql`), aplica todas las migraciones y ejecuta `supabase/tests/motor_fraccionamiento.test.sql`. Si alguna regla (conservación, inmutabilidad, saldos) se rompe, el pipeline falla. |
 
 El build no necesita variables de entorno: la página es dinámica y consulta la base solo en tiempo
-de ejecución.
+de ejecución. El estado de cada corrida se ve en la [pestaña Actions](#10-enlaces).
 
 ---
 
-## 10. Modelo de datos y lógica transaccional
+## 8. Modelo de datos y lógica transaccional
 
 ### Entidades
 
@@ -418,61 +348,26 @@ Las líneas de una transformación **suman exactamente 0**: esa es la conservaci
 
 ---
 
-## 11. Scripts disponibles
-
-| Comando | Descripción |
-|---------|-------------|
-| `npm run dev` | Servidor de desarrollo en `http://localhost:3000` |
-| `npm run dev:https` | Servidor de desarrollo con HTTPS en `https://localhost:3000` |
-| `npm run build` | Build de producción |
-| `npm start` | Sirve el build de producción |
-| `npm run lint` | ESLint (`next/core-web-vitals`) |
-| `npm run typecheck` | Verificación de tipos TypeScript |
-| `npx supabase start` / `stop` | Levanta / detiene Supabase local |
-| `npx supabase status` | Muestra URLs y claves locales |
-| `npx supabase db reset` | Recrea la base local y reaplica la migración |
-
----
-
-## 12. Solución de problemas
+## 9. Solución de problemas
 
 | Síntoma | Causa y solución |
 |---------|------------------|
-| La página muestra «No se pudo conectar con la base de datos — Faltan las variables SUPABASE_URL…» | No existe `.env.local` o le faltan valores. Repita el [paso 4](#paso-4--configurar-las-variables-de-entorno) y **reinicie** `npm run dev` (Next.js lee las variables al arrancar). |
-| «No se pudo consultar la base de datos: fetch failed» | Supabase no está levantado o la URL es incorrecta. Ejecute `npx supabase status`. |
-| «Invalid API key» / «No API key found» | La clave copiada está incompleta o es de otro proyecto. Copie de nuevo la anon/publishable key completa. |
-| «relation "v_saldo_insumo" does not exist» / «Could not find the function …» | La migración no se aplicó. Ejecute `npx supabase db reset` (local) o aplique el SQL en la nube (sección 7). |
-| `npx supabase start` falla con un error de Docker | Docker Desktop no está en ejecución. Ábralo y espere a *Engine running*. |
-| `npx supabase start` informa puertos ocupados (54321–54323) | Otro proyecto Supabase está corriendo: deténgalo con `npx supabase stop --project-id <id>` o libere los puertos. |
-| El puerto 3000 está ocupado | `npm run dev -- -p 3001` |
-| `npm ci` falla por versión de Node | Instale Node 20 LTS o superior (`node -v`). |
+| La página muestra «No se pudo conectar con la base de datos — Faltan las variables…» | Faltan `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` en Vercel. Cárguelas (sección 3.2) y **vuelva a desplegar**: las variables se aplican en el siguiente despliegue. |
+| «Invalid API key» / «No API key found» | La clave está incompleta o es de otro proyecto. Copie de nuevo la clave *publishable* / *anon* completa desde *Project Settings → API Keys*. |
+| «relation "v_saldo_insumo" does not exist» / «Could not find the function …» | Las migraciones no se aplicaron en Supabase Cloud. Ejecute `npx supabase db push` (sección 3.1). |
+| `npx supabase link` / `db push` piden token | Ejecute `npx supabase login` (o `npx supabase login --token <token>`). |
+| `npx supabase db push` falla con error de autenticación | La contraseña de la base es incorrecta. Puede restablecerla en *Project Settings → Database*. |
+| «Ya existe un insumo llamado …» | El nombre del insumo es único. Use otro nombre para repetir el caso de prueba. |
+| El CI falla en GitHub | Abra la corrida en la pestaña *Actions*: el job indica si falló el build de Next.js o una regla del motor en el test SQL. |
 
 ---
 
-## 13. Servidor MCP de Supabase (asistentes de IA)
+## 10. Enlaces
 
-El repositorio incluye `.mcp.json`, que conecta clientes MCP (Claude Code, Cursor, VS Code…) al
-servidor MCP que expone **Supabase local** en `http://127.0.0.1:54321/mcp`:
-
-```json
-{
-  "mcpServers": {
-    "supabase": { "type": "http", "url": "http://127.0.0.1:54321/mcp" }
-  }
-}
-```
-
-- Requiere Supabase local en ejecución (`npx supabase start`). No necesita claves.
-- Herramientas disponibles: `list_tables`, `execute_sql`, `apply_migration`, `list_migrations`,
-  `get_advisors`, `query_logs`, `generate_typescript_types`, `get_project_url`,
-  `get_publishable_keys`, `list_extensions`, `search_docs`.
-- En Claude Code, al abrir el proyecto se pide aprobar el servidor; verifique con `/mcp`.
-- Los triggers de inmutabilidad también protegen frente a `execute_sql`: ningún agente puede editar
-  ni borrar movimientos.
-
-Para un proyecto en **Supabase Cloud**, use el servidor remoto (autenticación OAuth en el navegador,
-`read_only=true` recomendado):
-
-```bash
-claude mcp add --transport http supabase "https://mcp.supabase.com/mcp?project_ref=<ref-del-proyecto>&read_only=true"
-```
+| Recurso | Enlace |
+|---------|--------|
+| Aplicación en producción (Vercel) | <https://gfk-control-insumos.vercel.app/> |
+| Base de datos (Supabase Cloud) | <https://supabase.com/dashboard/project/dglnfpusnecnvbhmeowf> |
+| Repositorio (GitHub) | <https://github.com/Geneyro/PIF_GeneyroLautaro> |
+| Integración continua (GitHub Actions) | <https://github.com/Geneyro/PIF_GeneyroLautaro/actions> |
+| Versión entregada (etiqueta `v1`) | <https://github.com/Geneyro/PIF_GeneyroLautaro/releases/tag/v1> |
