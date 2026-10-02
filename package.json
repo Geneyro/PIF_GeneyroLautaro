@@ -1,0 +1,33 @@
+{
+  "name": "gfk-control-insumos",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GFK Estética Vehicular - Sistema de Control de Consumo de Insumos (Prototipo v1, Iteración 1)",
+  "scripts": {
+    "dev": "next dev",
+    "dev:https": "next dev --experimental-https",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.109.0",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "supabase": "^2.119.0",
+    "typescript": "^5.9.3"
+  }
+}

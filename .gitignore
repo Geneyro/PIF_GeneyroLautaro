@@ -1,0 +1,24 @@
+# dependencias
+/node_modules
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# certificados generados por `next dev --experimental-https`
+/certificates
+
+# variables de entorno (nunca se versionan)
+.env
+.env*.local
+
+# Supabase CLI
+supabase/.branches
+supabase/.temp
+
+# varios
+.DS_Store
+npm-debug.log*
+.vercel

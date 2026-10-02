@@ -1,0 +1,45 @@
+# Configuración del entorno local de Supabase (CLI: `npx supabase start`).
+# Documentación: https://supabase.com/docs/guides/local-development/cli/config
+
+project_id = "gfk-insumos"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# El prototipo exige PostgreSQL 15.
+major_version = 15
+
+[db.seed]
+# El caso de prueba se ejecuta desde la interfaz: no se precargan datos.
+enabled = false
+
+[studio]
+enabled = true
+port = 54323
+api_url = "http://127.0.0.1"
+
+[local_smtp]
+enabled = false
+
+[storage]
+enabled = false
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+
+[realtime]
+enabled = false
+
+[edge_runtime]
+enabled = false
+
+[analytics]
+enabled = false

@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Aplicación Next.js: instala dependencias, analiza y construye.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Next.js · lint, tipos y build
+    runs-on: ubuntu-latest
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Verificación de tipos
+        run: npm run typecheck
+
+      - name: Build de producción
+        run: npm run build
+
+  # ---------------------------------------------------------------------------
+  # Base de datos: aplica las migraciones sobre PostgreSQL 15 y ejecuta el test
+  # de aceptación del motor de fraccionamiento (RF-01 a RF-05).
+  # ---------------------------------------------------------------------------
+  database:
+    name: PostgreSQL 15 · migraciones y tests PL/pgSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGPORT: 5432
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Crear roles de Supabase (anon, authenticated, service_role)
+        run: psql -v ON_ERROR_STOP=1 -f supabase/ci/roles.sql
+
+      - name: Aplicar migraciones
+        run: |
+          for f in supabase/migrations/*.sql; do
+            echo "::group::$f"
+            psql -v ON_ERROR_STOP=1 -f "$f"
+            echo "::endgroup::"
+          done
+
+      - name: Test de aceptación del motor de fraccionamiento
+        run: psql -v ON_ERROR_STOP=1 -f supabase/tests/motor_fraccionamiento.test.sql
