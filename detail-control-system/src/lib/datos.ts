@@ -1,11 +1,11 @@
 import 'server-only';
 import { crearClienteServidor } from './supabase/servidor';
-import type { Movimiento, SaldoInsumo, SaldoPresentacion } from './tipos';
+import type { Miembro, Movimiento, SaldoInsumo, SaldoPresentacion, SolicitudAcceso } from './tipos';
 
 /*
- * Lecturas. Todas pasan por las vistas de la base, que calculan los saldos
- * como suma de movimientos y solo devuelven filas de la organización del
- * usuario con sesión.
+ * Lecturas. Todas pasan por la sesión del usuario: las políticas de la base
+ * solo devuelven filas de su organización, y las vistas calculan los saldos
+ * como suma de movimientos.
  */
 
 function fallar(error: { message: string } | null) {
@@ -43,8 +43,29 @@ export async function cargarMovimientos(limite = 150): Promise<Movimiento[]> {
   return (data ?? []) as Movimiento[];
 }
 
-export async function nombreDelUsuario(usuarioId: string): Promise<string | null> {
+/** Membresía del usuario con sesión. Null si su cuenta todavía no fue aprobada. */
+export async function miembroActual(usuarioId: string): Promise<Miembro | null> {
   const supabase = crearClienteServidor();
-  const { data } = await supabase.from('miembro').select('nombre').eq('usuario_id', usuarioId).maybeSingle();
-  return (data?.nombre as string | undefined) ?? null;
+  const { data, error } = await supabase
+    .from('miembro')
+    .select('usuario_id, nombre, rol, creado_en')
+    .eq('usuario_id', usuarioId)
+    .maybeSingle();
+  fallar(error);
+  return (data as Miembro | null) ?? null;
+}
+
+export async function cargarMiembros(): Promise<Miembro[]> {
+  const supabase = crearClienteServidor();
+  const { data, error } = await supabase.from('miembro').select('usuario_id, nombre, rol, creado_en').order('creado_en');
+  fallar(error);
+  return (data ?? []) as Miembro[];
+}
+
+/** Solicitudes de acceso. La base solo se las devuelve a un administrador. */
+export async function cargarSolicitudes(): Promise<SolicitudAcceso[]> {
+  const supabase = crearClienteServidor();
+  const { data, error } = await supabase.from('solicitud_acceso').select('*').order('creado_en');
+  fallar(error);
+  return (data ?? []) as SolicitudAcceso[];
 }

@@ -1,6 +1,7 @@
 export type UnidadBase = 'mL' | 'g';
 export type TipoMovimiento = 'INGRESO' | 'FRACCIONAMIENTO' | 'COMPENSACION';
 export type Compartimento = 'GRANEL' | 'PRESENTACION' | 'MERMA';
+export type RolUsuario = 'ADMINISTRADOR' | 'OPERARIO';
 
 /** Tamaños de presentación admitidos (RF-02), en L o kg. */
 export const TAMANOS_PRESENTACION = [1, 5, 20, 60, 120] as const;
@@ -54,6 +55,23 @@ export interface Movimiento {
   usuario_id: string;
   usuario_nombre: string | null;
   registrado_en: string;
+}
+
+/** Usuario con acceso a la organización. */
+export interface Miembro {
+  usuario_id: string;
+  nombre: string;
+  rol: RolUsuario;
+  creado_en: string;
+}
+
+/** Cuenta registrada que espera aprobación. */
+export interface SolicitudAcceso {
+  usuario_id: string;
+  nombre: string;
+  correo: string | null;
+  rol_solicitado: RolUsuario;
+  creado_en: string;
 }
 
 /** Resultado de una acción de formulario. */

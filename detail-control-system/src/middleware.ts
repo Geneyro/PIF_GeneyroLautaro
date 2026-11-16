@@ -3,15 +3,22 @@ import { createServerClient } from '@supabase/ssr';
 import { entornoSupabase } from '@/lib/supabase/entorno';
 
 /*
- * RF-23: ninguna pantalla ni acción es accesible sin sesión.
+ * RF-23: ninguna pantalla ni acción de negocio es accesible sin sesión.
  * Toda petición pasa por acá: se verifica la sesión contra Supabase Auth y,
  * si no es válida, se redirige al inicio de sesión. Ante cualquier duda
  * (variables faltantes, error de red) se niega el acceso.
  */
+
+/** Pantallas para quien todavía no inició sesión. Con sesión, se va al inicio. */
+const SOLO_SIN_SESION = ['/login', '/registro', '/recuperar'];
+/** Vuelta desde Supabase Auth: debe funcionar con o sin sesión. */
+const SIEMPRE_ABIERTAS = ['/auth/callback'];
+
 export async function middleware(request: NextRequest) {
-  // Únicas rutas visibles sin sesión: el inicio de sesión y la puesta en marcha
-  // (que se cierra sola en cuanto existe el primer usuario).
-  const enLogin = ['/login', '/registro'].includes(request.nextUrl.pathname);
+  const ruta = request.nextUrl.pathname;
+  if (SIEMPRE_ABIERTAS.includes(ruta)) return NextResponse.next({ request });
+
+  const paraVisitantes = SOLO_SIN_SESION.includes(ruta);
   let respuesta = NextResponse.next({ request });
   let haySesion = false;
 
@@ -35,10 +42,10 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (!haySesion && !enLogin) {
+  if (!haySesion && !paraVisitantes) {
     return redirigir(request, '/login', respuesta);
   }
-  if (haySesion && enLogin) {
+  if (haySesion && paraVisitantes) {
     return redirigir(request, '/', respuesta);
   }
   return respuesta;

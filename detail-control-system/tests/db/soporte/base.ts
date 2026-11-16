@@ -46,6 +46,26 @@ export class Base {
     }
   }
 
+  /** Ejecuta `fn` como el servidor de la aplicación (clave de servicio, sin usuario). */
+  async comoServicio<T>(fn: (q: Consulta) => Promise<T>): Promise<T> {
+    await this.db.query(`select set_config('request.jwt.claims', '', false)`);
+    await this.db.exec('set role service_role');
+    try {
+      return await fn(this.admin);
+    } finally {
+      await this.db.exec('reset role');
+    }
+  }
+
+  /** Crea una cuenta de Supabase Auth, como lo harían el formulario o Google. */
+  async nuevaCuenta(correo: string, metadatos: Record<string, unknown> = {}, metadatosApp: Record<string, unknown> = {}) {
+    const [fila] = await this.admin(
+      'insert into auth.users (email, raw_user_meta_data, raw_app_meta_data) values ($1, $2::jsonb, $3::jsonb) returning id',
+      [correo, JSON.stringify(metadatos), JSON.stringify(metadatosApp)],
+    );
+    return fila.id as string;
+  }
+
   // --- Atajos de las operaciones del sistema -------------------------------
 
   async crearInsumo(usuario: string, nombre: string, unidadBase: string | null, presentaciones: number[] = []) {
@@ -117,8 +137,12 @@ export class Base {
   }
 }
 
-/** Crea la base, aplica las migraciones y carga dos organizaciones con usuarios. */
-export async function crearBase(): Promise<Base> {
+/**
+ * Crea la base y aplica las migraciones. Salvo que se pida una base vacía,
+ * carga dos organizaciones: en la A, Yanina (administradora) y Guido
+ * (operario); en la B, un administrador ajeno.
+ */
+export async function crearBase({ vacia = false }: { vacia?: boolean } = {}): Promise<Base> {
   const db = new PGlite();
   await db.exec(readFileSync(path.join(__dirname, 'supabase-simulado.sql'), 'utf8'));
 
@@ -130,18 +154,21 @@ export async function crearBase(): Promise<Base> {
     }
   }
 
+  if (vacia) return new Base(db);
+
+  // Cuentas de alta manual: no generan solicitud, se asocian acá mismo.
   await db.exec(`
-    insert into auth.users (id, email) values
-      ('${YANINA}', 'yanina@pruebas.test'),
-      ('${GUIDO}', 'guido@pruebas.test'),
-      ('${AJENO}', 'ajeno@pruebas.test');
+    insert into auth.users (id, email, raw_app_meta_data) values
+      ('${YANINA}', 'yanina@pruebas.test', '{"alta_manual": true}'),
+      ('${GUIDO}', 'guido@pruebas.test', '{"alta_manual": true}'),
+      ('${AJENO}', 'ajeno@pruebas.test', '{"alta_manual": true}');
     insert into public.organizacion (id, nombre) values
       ('${ORG_A}', 'GFK Estética Vehicular (pruebas)'),
       ('${ORG_B}', 'Otra organización (pruebas)');
-    insert into public.miembro (usuario_id, organizacion_id, nombre) values
-      ('${YANINA}', '${ORG_A}', 'Yanina'),
-      ('${GUIDO}', '${ORG_A}', 'Guido'),
-      ('${AJENO}', '${ORG_B}', 'Usuario ajeno');
+    insert into public.miembro (usuario_id, organizacion_id, nombre, rol) values
+      ('${YANINA}', '${ORG_A}', 'Yanina', 'ADMINISTRADOR'),
+      ('${GUIDO}', '${ORG_A}', 'Guido', 'OPERARIO'),
+      ('${AJENO}', '${ORG_B}', 'Usuario ajeno', 'ADMINISTRADOR');
   `);
 
   return new Base(db);

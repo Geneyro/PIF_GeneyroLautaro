@@ -29,6 +29,7 @@ del prototipo.
 | Requisito | Qué hace | Dónde se impone |
 |-----------|----------|-----------------|
 | **RF-23** Autenticación | Inicio y cierre de sesión; nada funciona sin sesión; cada movimiento guarda el ID del usuario | `src/middleware.ts`, políticas de seguridad por fila, trigger `trg_movimiento_atribuir` |
+| Cuentas | Registro con rol (Administrador / Operario), inicio con Google, recuperación de contraseña por correo; toda cuenta nueva espera la aprobación de un administrador | `src/lib/cuentas.ts`, `src/app/acciones.ts`, migración `cuentas_y_roles` |
 | **RF-02** Catálogo | Alta de insumo con unidad base (mL o g) y presentaciones de 1, 5, 20, 60 o 120 L | `crear_insumo()`, `agregar_presentacion()` |
 | **RF-03** Ingreso | Ingreso convertido a unidad base, con proveedor y costo obligatorios | `registrar_ingreso()` |
 | **RF-01** Fraccionamiento | Rechaza lo que no conserva la cantidad o excede el saldo, e informa la cantidad no explicada | `registrar_fraccionamiento()`, trigger `trg_movimiento_invariantes` |
@@ -125,6 +126,20 @@ Las variables de entorno se definen en `.env.local` para desarrollo (no se versi
 Ninguna clave se guarda en el repositorio. La clave `service_role` nunca lleva el prefijo
 `NEXT_PUBLIC_` ni se importa desde código de cliente.
 
+**Google OAuth.** `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` no van en Vercel: con Supabase Auth,
+las credenciales de Google se guardan en Supabase, que es quien habla con Google. Para habilitar
+«Continuar con Google»:
+
+1. En Google Cloud Console → *APIs y servicios → Credenciales*, crear un **ID de cliente de OAuth**
+   de tipo *Aplicación web*, con la URI de redirección autorizada
+   `https://<reference-id>.supabase.co/auth/v1/callback`.
+2. Completar en `.env.local` `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SUPABASE_ACCESS_TOKEN` y
+   `SUPABASE_PROJECT_REF` (ver `.env.example`).
+3. Ejecutar `npm run auth:google`. El script habilita Google en Supabase y permite que cree cuentas
+   nuevas, que igual quedan pendientes de aprobación.
+
+Mientras Google no esté habilitado, el botón muestra un aviso en lugar de fallar.
+
 ## 5. Base de datos
 
 ### Migraciones
@@ -134,6 +149,7 @@ Ninguna clave se guarda en el repositorio. La clave `service_role` nunca lleva e
 | `20261115000001_esquema.sql` | Tablas, tipos y restricciones |
 | `20261115000002_reglas.sql` | Funciones PL/pgSQL, triggers y vistas |
 | `20261115000003_seguridad.sql` | Seguridad por fila y permisos |
+| `20261116000001_cuentas_y_roles.sql` | Roles, solicitudes de acceso, aprobación y puesta en marcha |
 
 Aplicarlas al proyecto remoto (pide la contraseña de la base):
 
@@ -146,19 +162,42 @@ npx supabase db push
 
 `db push` aplica solo las migraciones. **`seed.sql` nunca se aplica a producción.**
 
-### Alta de usuarios
+### Cuentas y acceso
 
-No hay registro público: Supabase Auth tiene el registro deshabilitado (*Authentication → Sign In /
-Providers → Allow new users to sign up*, desactivado). Los usuarios se crean desde la propia
-aplicación, en el servidor:
+| Pantalla | Qué hace |
+|----------|----------|
+| `/login` | Correo electrónico y contraseña, «¿Olvidaste tu contraseña?» y «Continuar con Google» |
+| `/registro` | Nombre completo, correo, contraseña (dos veces) y rol: Administrador u Operario |
+| `/recuperar` | Envía por correo un enlace seguro, de un solo uso, para restablecer la contraseña |
+| `/restablecer` | Se abre desde ese enlace y guarda la contraseña nueva |
+| *Usuarios* | Los administradores aprueban (con el rol que elijan) o rechazan las cuentas nuevas |
 
-1. **Puesta en marcha.** Mientras no exista ningún usuario, la pantalla de inicio de sesión muestra
-   el enlace «Crear el primer usuario» (`/registro`), que crea la organización y su primer usuario.
-   En cuanto existe un usuario, esa pantalla se cierra sola y redirige al inicio de sesión.
-2. **Después.** Cualquier usuario con sesión da de alta a otros desde la sección *Usuarios*. El
-   usuario nuevo queda en la misma organización y puede iniciar sesión de inmediato.
+Reglas:
 
-La lógica está en `src/lib/usuarios.ts` y usa la clave de servicio, que solo existe en el servidor.
+- **Registro con aprobación.** Toda cuenta nueva, del formulario o de Google, queda como solicitud
+  de acceso y no ve ni opera ningún dato hasta que un administrador la aprueba. El rol elegido al
+  registrarse es un pedido: lo confirma quien aprueba. Lo impone la base (trigger sobre
+  `auth.users`, tabla `solicitud_acceso` y políticas por fila), no la interfaz.
+- **Puesta en marcha.** La primera cuenta del sistema entra directamente como administradora de la
+  organización. A partir de ahí, todas esperan aprobación.
+- **Roles.** Administrador y Operario operan existencias por igual. Solo el administrador aprueba o
+  rechaza cuentas.
+- **Contraseñas.** Las guarda Supabase Auth con **bcrypt** en `auth.users`. Las tablas de la
+  aplicación nunca las reciben. Mínimo 8 caracteres; máximo 72 bytes, el límite de bcrypt.
+- **Correos duplicados.** Supabase Auth no admite dos cuentas con el mismo correo. El formulario lo
+  informa con un mensaje claro.
+- **Recuperación.** El enlace usa el flujo PKCE de Supabase Auth: es de un solo uso, vence en una
+  hora y debe abrirse en el mismo navegador donde se pidió. El mensaje de confirmación es el mismo
+  exista o no la cuenta, para no revelar qué correos están registrados.
+
+En Supabase → *Authentication → URL Configuration* deben figurar la URL del sitio
+(`https://detail-control.vercel.app`) y, en *Redirect URLs*, la de producción, la de las vistas
+previas (`https://detail-control-*-<equipo>.vercel.app/**`) y `http://localhost:3100/**`.
+
+**Envío de correos.** El servicio de correo incluido en Supabase solo entrega a los miembros del
+equipo del proyecto y con un límite de pocos correos por hora. Para que la recuperación llegue a
+cualquier usuario, configurar un SMTP propio en *Authentication → Emails → SMTP Settings* (por
+ejemplo, Resend con un dominio verificado).
 
 ### Tipos de TypeScript
 
@@ -192,7 +231,7 @@ npm run dev     # http://localhost:3100
 
 | # | Pantalla | Acción | Resultado |
 |---|----------|--------|-----------|
-| 0 | Inicio de sesión (solo la primera vez) | «Crear el primer usuario»; luego, en *Usuarios*, dar de alta al segundo | Los dos socios tienen acceso |
+| 0 | Registro (solo la primera vez) | Yanina crea su cuenta en «Regístrate»; Guido crea la suya y Yanina la aprueba en *Usuarios* | Los dos socios tienen acceso |
 | 1 | Inicio de sesión | Ingresar con el correo y la contraseña de Yanina | Entra a *Saldos* |
 | 2 | Catálogo | Nuevo insumo, *Líquido (mL)*, presentación *1 L* | El insumo queda con una presentación de 1.000 mL |
 | 3 | Ingresos | Cantidad `5`, unidad `L`, proveedor y costo | «Se registran 5.000 mL». Saldo 5.000 mL |
@@ -211,7 +250,8 @@ npm test
 |---------|--------------|-------------|
 | `tests/db/` | Los criterios de aceptación de RF-23, RF-02, RF-03, RF-01, RF-06, RF-04, RF-05 y RNF-04, e intentos de **violar** cada regla con SQL directo | Siempre. Aplica las migraciones reales sobre un PostgreSQL en memoria (PGlite); no necesita Docker ni conexión |
 | `tests/unidad/` | Lectura y formato de cantidades y dinero sin flotantes | Siempre |
-| `tests/api/` | El caso del bidón de punta a punta contra Supabase Auth y la API, con los dos usuarios, y el alta de usuarios | Solo si están definidas `PRUEBAS_SUPABASE_URL`, `PRUEBAS_SUPABASE_ANON_KEY` y `PRUEBAS_SUPABASE_SERVICE_ROLE_KEY`. **Nunca apuntarlas a producción** |
+| `tests/db/cuentas.test.ts` | Solicitudes de acceso, aprobación, rechazo, roles y puesta en marcha, incluidos los intentos de saltear la aprobación | Siempre |
+| `tests/api/` | El caso del bidón de punta a punta contra Supabase Auth y la API con los dos usuarios; registro, correo duplicado, aprobación, recuperación y cambio de contraseña | Solo si están definidas `PRUEBAS_SUPABASE_URL`, `PRUEBAS_SUPABASE_ANON_KEY` y `PRUEBAS_SUPABASE_SERVICE_ROLE_KEY`. **Nunca apuntarlas a producción** |
 
 `tests/db/soporte/supabase-simulado.sql` reproduce lo mínimo de la plataforma Supabase (roles de la
 API y `auth.uid()`) para las pruebas en memoria.
@@ -248,4 +288,7 @@ curl -sI --tls-max 1.1 https://<dominio>/login   # debe fallar: no se acepta TLS
   puede elegirlo.
 - **Movimientos inmutables:** los triggers rechazan `UPDATE`, `DELETE` y `TRUNCATE` incluso para el
   dueño de la tabla y para la clave `service_role`.
-- **Sin registro público:** los usuarios los da de alta el responsable del sistema.
+- **Registro con aprobación:** cualquiera puede crear una cuenta, pero no ve ni opera nada hasta que
+  un administrador la aprueba. La primera cuenta del sistema es la única que entra sola.
+- **Contraseñas con bcrypt:** las guarda Supabase Auth. El CI verifica que todas las contraseñas de
+  `auth.users` tengan formato bcrypt.

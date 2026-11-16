@@ -1,16 +1,18 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
+import { normalizarCorreo, registrarCuenta, validarClave, validarRegistro } from '@/lib/cuentas';
 import { formatCantidad, leerEnteroNoNegativo, leerEnteroPositivo, pesosACentavos } from '@/lib/formato';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
+import { entornoSupabase } from '@/lib/supabase/entorno';
 import { crearClienteServidor } from '@/lib/supabase/servidor';
-import { crearPrimerUsuario, crearUsuario } from '@/lib/usuarios';
 import type { Estado, SaldoInsumo } from '@/lib/tipos';
 
 /*
- * Server Actions. Se ejecutan en el servidor con la sesión del usuario y
- * delegan TODA regla de negocio en las funciones PL/pgSQL: acá solo se leen
+ * Server Actions. Se ejecutan solo en el servidor, con la sesión del usuario,
+ * y delegan TODA regla de negocio en las funciones PL/pgSQL: acá solo se leen
  * los campos del formulario. Si la base rechaza la operación, su mensaje se
  * devuelve tal cual a la pantalla.
  */
@@ -18,6 +20,12 @@ import type { Estado, SaldoInsumo } from '@/lib/tipos';
 function texto(fd: FormData, campo: string): string | null {
   const v = fd.get(campo);
   return typeof v === 'string' && v.trim() !== '' ? v.trim() : null;
+}
+
+/** Valor tal cual se escribió (las contraseñas no se recortan). */
+function crudo(fd: FormData, campo: string): string | null {
+  const v = fd.get(campo);
+  return typeof v === 'string' && v !== '' ? v : null;
 }
 
 type ErrorBase = { message: string; hint?: string | null };
@@ -43,17 +51,38 @@ async function saldoDe(insumoId: string): Promise<SaldoInsumo | null> {
   return (data as SaldoInsumo | null) ?? null;
 }
 
-// --- RF-23 · Sesión -----------------------------------------------------------
+/**
+ * Dirección pública de la aplicación (producción o vista previa), para armar
+ * los enlaces de vuelta. Supabase solo acepta las direcciones de su lista
+ * permitida, así que un encabezado falsificado no puede desviar el enlace.
+ */
+function origenDeLaPeticion(): string {
+  const h = headers();
+  const origen = h.get('origin');
+  if (origen) return origen;
+  const host = h.get('x-forwarded-host') ?? h.get('host') ?? 'localhost:3100';
+  const protocolo = h.get('x-forwarded-proto') ?? (host.startsWith('localhost') ? 'http' : 'https');
+  return `${protocolo}://${host}`;
+}
+
+// =============================================================================
+// Sesión y cuentas (RF-23)
+// =============================================================================
 
 export async function iniciarSesion(_previo: Estado, fd: FormData): Promise<Estado> {
   const resultado = await ejecutar(async () => {
-    const correo = texto(fd, 'correo');
-    const clave = fd.get('clave');
-    if (!correo || typeof clave !== 'string' || clave === '') {
-      return { ok: false, mensaje: 'Ingresá tu correo y tu contraseña.' };
+    const correo = normalizarCorreo(texto(fd, 'correo'));
+    const clave = crudo(fd, 'clave');
+    if (!correo || !clave) {
+      return { ok: false, mensaje: 'Ingresa tu correo electrónico y tu contraseña.' };
     }
     const { error } = await crearClienteServidor().auth.signInWithPassword({ email: correo, password: clave });
-    if (error) return { ok: false, mensaje: 'Correo o contraseña incorrectos.' };
+    if (error) {
+      if (error.code === 'email_not_confirmed') {
+        return { ok: false, mensaje: 'Tu correo electrónico todavía no está confirmado.' };
+      }
+      return { ok: false, mensaje: 'Correo electrónico o contraseña incorrectos.' };
+    }
     return { ok: true, mensaje: '' };
   });
   if (resultado?.ok) redirect('/');
@@ -65,50 +94,133 @@ export async function cerrarSesion(): Promise<void> {
   redirect('/login');
 }
 
-// --- Alta de usuarios (sin registro público) ----------------------------------
+/**
+ * Registro. La cuenta queda pendiente hasta que un administrador la apruebe;
+ * si es la primera del sistema, entra directamente como administradora.
+ */
+export async function crearCuenta(_previo: Estado, fd: FormData): Promise<Estado> {
+  const validacion = validarRegistro({
+    nombre: texto(fd, 'nombre'),
+    correo: texto(fd, 'correo'),
+    clave: crudo(fd, 'clave'),
+    confirmacion: crudo(fd, 'confirmacion'),
+    rol: texto(fd, 'rol'),
+  });
+  if (!validacion.ok) return { ok: false, mensaje: validacion.mensaje };
+  const datos = validacion.datos;
 
-function datosUsuario(fd: FormData) {
-  const clave = fd.get('clave');
-  return { nombre: texto(fd, 'nombre'), correo: texto(fd, 'correo'), clave: typeof clave === 'string' ? clave : null };
+  const resultado = await ejecutar(async () => {
+    await registrarCuenta(crearClienteAdmin(), datos);
+    const { error } = await crearClienteServidor().auth.signInWithPassword({
+      email: datos.correo,
+      password: datos.clave,
+    });
+    if (error) return { ok: true, mensaje: 'Cuenta creada. Ya puedes iniciar sesión.' };
+    return { ok: true, mensaje: '' };
+  });
+  if (resultado?.ok && resultado.mensaje === '') redirect('/');
+  return resultado;
 }
 
-/** Puesta en marcha: crea la organización y el primer usuario. Solo si no existe ninguno. */
-export async function registrarPrimerUsuario(_previo: Estado, fd: FormData): Promise<Estado> {
-  const resultado = await ejecutar(async () => {
-    const datos = datosUsuario(fd);
-    await crearPrimerUsuario(crearClienteAdmin(), texto(fd, 'organizacion'), datos);
-    const { error } = await crearClienteServidor().auth.signInWithPassword({
-      email: datos.correo!.trim().toLowerCase(),
-      password: datos.clave!,
+/** ¿Está habilitado el proveedor Google en Supabase Auth? */
+async function googleHabilitado(): Promise<boolean> {
+  const entorno = entornoSupabase();
+  if (!entorno) return false;
+  try {
+    const respuesta = await fetch(`${entorno.url}/auth/v1/settings`, {
+      headers: { apikey: entorno.clave },
+      cache: 'no-store',
     });
-    if (error) return { ok: false, mensaje: 'El usuario se creó. Iniciá sesión con tu correo y contraseña.' };
+    if (!respuesta.ok) return false;
+    const ajustes = (await respuesta.json()) as { external?: { google?: boolean } };
+    return ajustes.external?.google === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * «Continuar con Google». Si el correo no tiene cuenta, Supabase la crea y
+ * queda como solicitud de acceso, igual que una cuenta del formulario.
+ */
+export async function continuarConGoogle(): Promise<void> {
+  if (!(await googleHabilitado())) redirect('/login?error=google-no-configurado');
+  const { data, error } = await crearClienteServidor().auth.signInWithOAuth({
+    provider: 'google',
+    options: { redirectTo: `${origenDeLaPeticion()}/auth/callback` },
+  });
+  if (error || !data.url) redirect('/login?error=google');
+  redirect(data.url);
+}
+
+/** Envía el correo con el enlace seguro para restablecer la contraseña. */
+export async function solicitarRecuperacion(_previo: Estado, fd: FormData): Promise<Estado> {
+  return ejecutar(async () => {
+    const correo = normalizarCorreo(texto(fd, 'correo'));
+    if (!correo) return { ok: false, mensaje: 'Ingresa un correo electrónico válido.' };
+
+    const { error } = await crearClienteServidor().auth.resetPasswordForEmail(correo, {
+      redirectTo: `${origenDeLaPeticion()}/auth/callback?next=/restablecer`,
+    });
+    if (error?.status === 429) {
+      return {
+        ok: false,
+        mensaje: 'Se enviaron demasiados correos en poco tiempo. Espera unos minutos y vuelve a intentarlo.',
+      };
+    }
+    if (error) return { ok: false, mensaje: 'No se pudo enviar el correo. Inténtalo de nuevo más tarde.' };
+
+    // Mismo mensaje exista o no la cuenta: no se revela qué correos están registrados.
+    return {
+      ok: true,
+      mensaje: 'Si el correo está registrado, te enviamos un enlace para restablecer la contraseña.',
+      detalle: 'Revisa tu bandeja de entrada y la carpeta de correo no deseado. El enlace vence en una hora.',
+    };
+  });
+}
+
+/** Guarda la contraseña nueva (sesión abierta por el enlace del correo). */
+export async function restablecerClave(_previo: Estado, fd: FormData): Promise<Estado> {
+  const clave = crudo(fd, 'clave');
+  const errorClave = validarClave(clave, crudo(fd, 'confirmacion'));
+  if (errorClave) return { ok: false, mensaje: errorClave };
+
+  const resultado = await ejecutar(async () => {
+    const { error } = await crearClienteServidor().auth.updateUser({ password: clave! });
+    if (error?.code === 'same_password') {
+      return { ok: false, mensaje: 'La contraseña nueva debe ser distinta de la anterior.' };
+    }
+    if (error) return { ok: false, mensaje: `No se pudo cambiar la contraseña: ${error.message}` };
     return { ok: true, mensaje: '' };
   });
   if (resultado?.ok) redirect('/');
   return resultado;
 }
 
-/** Un usuario con sesión da de alta a otro, siempre dentro de su propia organización. */
-export async function agregarUsuario(_previo: Estado, fd: FormData): Promise<Estado> {
+/** Un administrador aprueba (con el rol elegido) o rechaza una solicitud de acceso. */
+export async function resolverSolicitud(_previo: Estado, fd: FormData): Promise<Estado> {
   return ejecutar(async () => {
+    const usuarioId = texto(fd, 'usuario_id');
+    const decision = texto(fd, 'decision');
     const supabase = crearClienteServidor();
-    const { data: sesion } = await supabase.auth.getUser();
-    if (!sesion.user) return { ok: false, mensaje: 'Se requiere una sesión iniciada para operar.' };
-    const { data: miembro } = await supabase
-      .from('miembro')
-      .select('organizacion_id')
-      .eq('usuario_id', sesion.user.id)
-      .maybeSingle();
-    if (!miembro) return { ok: false, mensaje: 'El usuario no pertenece a ninguna organización.' };
 
-    const datos = datosUsuario(fd);
-    await crearUsuario(crearClienteAdmin(), miembro.organizacion_id as string, datos);
+    if (decision === 'rechazar') {
+      const { error } = await supabase.rpc('rechazar_solicitud', { p_usuario_id: usuarioId });
+      if (error) return rechazo(error);
+      revalidatePath('/usuarios');
+      return { ok: true, mensaje: 'Solicitud rechazada. La cuenta no tiene acceso.' };
+    }
+
+    const { error } = await supabase.rpc('aprobar_solicitud', { p_usuario_id: usuarioId, p_rol: texto(fd, 'rol') });
+    if (error) return rechazo(error);
     revalidatePath('/usuarios');
-    return { ok: true, mensaje: `Usuario «${datos.nombre}» creado. Ya puede iniciar sesión con su correo y contraseña.` };
+    return { ok: true, mensaje: 'Cuenta aprobada. Ya puede operar.' };
   });
 }
 
-// --- RF-02 · Alta de insumo con presentaciones --------------------------------
+// =============================================================================
+// RF-02 · Alta de insumo con presentaciones
+// =============================================================================
 
 export async function crearInsumo(_previo: Estado, fd: FormData): Promise<Estado> {
   return ejecutar(async () => {
@@ -138,7 +250,9 @@ export async function agregarPresentacion(_previo: Estado, fd: FormData): Promis
   });
 }
 
-// --- RF-03 · Ingreso ------------------------------------------------------------
+// =============================================================================
+// RF-03 · Ingreso
+// =============================================================================
 
 export async function registrarIngreso(_previo: Estado, fd: FormData): Promise<Estado> {
   return ejecutar(async () => {
@@ -171,7 +285,9 @@ export async function registrarIngreso(_previo: Estado, fd: FormData): Promise<E
   });
 }
 
-// --- RF-01 / RF-06 · Fraccionamiento --------------------------------------------
+// =============================================================================
+// RF-01 / RF-06 · Fraccionamiento
+// =============================================================================
 
 export async function registrarFraccionamiento(_previo: Estado, fd: FormData): Promise<Estado> {
   return ejecutar(async () => {
@@ -207,7 +323,9 @@ export async function registrarFraccionamiento(_previo: Estado, fd: FormData): P
   });
 }
 
-// --- RF-05 · Corrección por compensación ----------------------------------------
+// =============================================================================
+// RF-05 · Corrección por compensación
+// =============================================================================
 
 export async function compensarOperacion(_previo: Estado, fd: FormData): Promise<Estado> {
   return ejecutar(async () => {

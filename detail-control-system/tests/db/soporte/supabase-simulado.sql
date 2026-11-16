@@ -10,8 +10,10 @@ create role service_role nologin bypassrls;
 create schema auth;
 
 create table auth.users (
-  id    uuid primary key default gen_random_uuid(),
-  email text unique
+  id                 uuid primary key default gen_random_uuid(),
+  email              text unique,
+  raw_user_meta_data jsonb not null default '{}',
+  raw_app_meta_data  jsonb not null default '{}'
 );
 
 -- Misma semántica que en Supabase: el `sub` del JWT de la petición.

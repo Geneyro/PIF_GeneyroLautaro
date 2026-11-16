@@ -14,17 +14,18 @@ insert into public.organizacion (id, nombre) values
   ('0a000000-0000-4000-8000-000000000001', 'GFK Estética Vehicular (pruebas)'),
   ('0b000000-0000-4000-8000-000000000002', 'Otra organización (pruebas)');
 
--- Usuarios de prueba en Supabase Auth.
+-- Usuarios de prueba en Supabase Auth. «alta_manual» evita que el trigger de
+-- cuentas nuevas los deje como solicitud: se asocian acá mismo.
 do $$
 declare
   u record;
 begin
   for u in
     select * from (values
-      ('11111111-1111-4111-8111-111111111111'::uuid, 'yanina@gfk.test', 'Yanina', '0a000000-0000-4000-8000-000000000001'::uuid),
-      ('22222222-2222-4222-8222-222222222222'::uuid, 'guido@gfk.test',  'Guido',  '0a000000-0000-4000-8000-000000000001'::uuid),
-      ('33333333-3333-4333-8333-333333333333'::uuid, 'ajeno@otra.test', 'Usuario ajeno', '0b000000-0000-4000-8000-000000000002'::uuid)
-    ) as t (id, correo, nombre, organizacion_id)
+      ('11111111-1111-4111-8111-111111111111'::uuid, 'yanina@gfk.test', 'Yanina', '0a000000-0000-4000-8000-000000000001'::uuid, 'ADMINISTRADOR'),
+      ('22222222-2222-4222-8222-222222222222'::uuid, 'guido@gfk.test',  'Guido',  '0a000000-0000-4000-8000-000000000001'::uuid, 'OPERARIO'),
+      ('33333333-3333-4333-8333-333333333333'::uuid, 'ajeno@otra.test', 'Usuario ajeno', '0b000000-0000-4000-8000-000000000002'::uuid, 'ADMINISTRADOR')
+    ) as t (id, correo, nombre, organizacion_id, rol)
   loop
     insert into auth.users
       (instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -33,7 +34,7 @@ begin
     values
       ('00000000-0000-0000-0000-000000000000', u.id, 'authenticated', 'authenticated', u.correo,
        extensions.crypt('detail-control-pruebas', extensions.gen_salt('bf')), now(),
-       '{"provider":"email","providers":["email"]}', '{}', now(), now(),
+       '{"provider":"email","providers":["email"],"alta_manual":true}', '{}', now(), now(),
        '', '', '', '');
 
     insert into auth.identities
@@ -43,8 +44,8 @@ begin
        jsonb_build_object('sub', u.id::text, 'email', u.correo, 'email_verified', true),
        'email', now(), now(), now());
 
-    insert into public.miembro (usuario_id, organizacion_id, nombre)
-    values (u.id, u.organizacion_id, u.nombre);
+    insert into public.miembro (usuario_id, organizacion_id, nombre, rol)
+    values (u.id, u.organizacion_id, u.nombre, u.rol::public.rol_usuario);
   end loop;
 end;
 $$;

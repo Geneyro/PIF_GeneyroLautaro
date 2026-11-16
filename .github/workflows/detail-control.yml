@@ -46,8 +46,9 @@ jobs:
         run: npm run typecheck
 
       # Supabase local dentro del runner: aplica todas las migraciones y el seed.
+      # Un reintento cubre las fallas pasajeras al descargar las imágenes.
       - name: Levantar Supabase local (migraciones + datos de prueba)
-        run: npx supabase start
+        run: npx supabase start || (npx supabase stop --no-backup || true; npx supabase start)
 
       # Claves del Supabase local del runner: son valores de desarrollo que
       # genera la CLI, no secretos del proyecto. No se usa ningún secreto de GitHub.
@@ -60,40 +61,80 @@ jobs:
           if [ -z "$clave" ]; then clave="$(valor PUBLISHABLE_KEY)"; fi
           servicio="$(valor SERVICE_ROLE_KEY)"
           if [ -z "$servicio" ]; then servicio="$(valor SECRET_KEY)"; fi
-          if [ -z "$url" ] || [ -z "$clave" ] || [ -z "$servicio" ]; then
-            echo "No se pudieron leer API_URL / ANON_KEY / SERVICE_ROLE_KEY de 'supabase status'." >&2
+          base="$(valor DB_URL)"
+          if [ -z "$url" ] || [ -z "$clave" ] || [ -z "$servicio" ] || [ -z "$base" ]; then
+            echo "No se pudieron leer API_URL / ANON_KEY / SERVICE_ROLE_KEY / DB_URL de 'supabase status'." >&2
             sed -E 's/=.*/=<oculto>/' "$RUNNER_TEMP/supabase.env" >&2
             exit 1
           fi
           {
             echo "NEXT_PUBLIC_SUPABASE_URL=$url"
             echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$clave"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$servicio"
             echo "PRUEBAS_SUPABASE_URL=$url"
             echo "PRUEBAS_SUPABASE_ANON_KEY=$clave"
-            echo "SUPABASE_SERVICE_ROLE_KEY=$servicio"
             echo "PRUEBAS_SUPABASE_SERVICE_ROLE_KEY=$servicio"
+            echo "PRUEBAS_DB_URL=$base"
           } >> "$GITHUB_ENV"
 
       - name: Pruebas de los criterios de aceptación
         run: npm test
 
+      # Las pruebas crean cuentas por el mismo camino que «Crear cuenta».
+      # Se verifica que Supabase Auth guardó todas las contraseñas con bcrypt.
+      - name: Contraseñas guardadas con bcrypt
+        run: |
+          psql "$PRUEBAS_DB_URL" -v ON_ERROR_STOP=1 -q <<'SQL'
+          do $$
+          declare
+            v_total integer;
+            v_otras integer;
+          begin
+            select count(*) into v_total from auth.users where coalesce(encrypted_password, '') <> '';
+            select count(*) into v_otras from auth.users
+             where coalesce(encrypted_password, '') <> ''
+               and encrypted_password !~ '^\$2[aby]\$[0-9]{2}\$';
+            if v_total = 0 then
+              raise exception 'No hay contraseñas para verificar.';
+            end if;
+            if v_otras > 0 then
+              raise exception '% de % contraseñas no están guardadas con bcrypt.', v_otras, v_total;
+            end if;
+            raise notice 'OK: % contraseñas guardadas con bcrypt.', v_total;
+          end;
+          $$;
+          SQL
+
       - name: Compilar la aplicación
         run: npm run build
 
-      - name: Sin sesión, toda ruta redirige al inicio de sesión
+      - name: Rutas públicas y protegidas
         run: |
           npm run start > "$RUNNER_TEMP/app.log" 2>&1 &
           for i in $(seq 1 30); do
             curl -s -o /dev/null http://localhost:3100/login && break
             sleep 1
           done
-          for ruta in / /catalogo /ingresos /fraccionar /movimientos /usuarios /registro; do
+          fallar() { echo "$1" >&2; cat "$RUNNER_TEMP/app.log" >&2; exit 1; }
+
+          # Sin sesión, toda pantalla de negocio redirige al inicio de sesión.
+          for ruta in / /catalogo /ingresos /fraccionar /movimientos /usuarios /restablecer; do
             resultado="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:3100$ruta")"
             echo "$ruta -> $resultado"
-            if [ "$resultado" != "307 http://localhost:3100/login" ]; then
-              echo "La ruta $ruta no redirige al inicio de sesión." >&2
-              cat "$RUNNER_TEMP/app.log" >&2
-              exit 1
-            fi
+            [ "$resultado" = "307 http://localhost:3100/login" ] || fallar "La ruta $ruta no redirige al inicio de sesión."
           done
-          test "$(curl -s -o /dev/null -w '%{http_code}' http://localhost:3100/login)" = "200"
+
+          # Pantallas de acceso: abiertas sin sesión.
+          for ruta in /login /registro /recuperar; do
+            codigo="$(curl -s -o "$RUNNER_TEMP/pagina.html" -w '%{http_code}' "http://localhost:3100$ruta")"
+            echo "$ruta -> $codigo"
+            [ "$codigo" = "200" ] || fallar "La ruta $ruta no responde 200."
+          done
+          grep -q 'Iniciar sesión' <(curl -s http://localhost:3100/login) || fallar "Falta «Iniciar sesión»."
+          grep -q 'Continuar con Google' <(curl -s http://localhost:3100/login) || fallar "Falta «Continuar con Google»."
+          grep -q 'Crear cuenta' <(curl -s http://localhost:3100/registro) || fallar "Falta «Crear cuenta»."
+
+          # La vuelta de Supabase sin código válido vuelve al inicio con un aviso.
+          resultado="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:3100/auth/callback?next=/restablecer")"
+          echo "/auth/callback -> $resultado"
+          [ "$resultado" = "307 http://localhost:3100/login?error=enlace" ] || fallar "La vuelta sin código no redirige con aviso."
