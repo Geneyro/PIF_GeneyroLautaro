@@ -9,6 +9,7 @@ const ENLACES = [
   { href: '/ingresos', texto: 'Ingresos' },
   { href: '/catalogo', texto: 'Catálogo' },
   { href: '/movimientos', texto: 'Movimientos' },
+  { href: '/usuarios', texto: 'Usuarios' },
 ];
 
 export function Navegacion() {

@@ -474,6 +474,10 @@ summary:focus-visible {
   font-size: 1.4rem;
 }
 
+.pie {
+  margin: 1rem 0 0;
+}
+
 @media (max-width: 30rem) {
   .sesion .suave {
     display: none;

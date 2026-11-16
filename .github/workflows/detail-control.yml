@@ -58,8 +58,10 @@ jobs:
           url="$(valor API_URL)"
           clave="$(valor ANON_KEY)"
           if [ -z "$clave" ]; then clave="$(valor PUBLISHABLE_KEY)"; fi
-          if [ -z "$url" ] || [ -z "$clave" ]; then
-            echo "No se pudieron leer API_URL / ANON_KEY de 'supabase status'." >&2
+          servicio="$(valor SERVICE_ROLE_KEY)"
+          if [ -z "$servicio" ]; then servicio="$(valor SECRET_KEY)"; fi
+          if [ -z "$url" ] || [ -z "$clave" ] || [ -z "$servicio" ]; then
+            echo "No se pudieron leer API_URL / ANON_KEY / SERVICE_ROLE_KEY de 'supabase status'." >&2
             sed -E 's/=.*/=<oculto>/' "$RUNNER_TEMP/supabase.env" >&2
             exit 1
           fi
@@ -68,6 +70,8 @@ jobs:
             echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=$clave"
             echo "PRUEBAS_SUPABASE_URL=$url"
             echo "PRUEBAS_SUPABASE_ANON_KEY=$clave"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$servicio"
+            echo "PRUEBAS_SUPABASE_SERVICE_ROLE_KEY=$servicio"
           } >> "$GITHUB_ENV"
 
       - name: Pruebas de los criterios de aceptación
@@ -83,7 +87,7 @@ jobs:
             curl -s -o /dev/null http://localhost:3100/login && break
             sleep 1
           done
-          for ruta in / /catalogo /ingresos /fraccionar /movimientos; do
+          for ruta in / /catalogo /ingresos /fraccionar /movimientos /usuarios /registro; do
             resultado="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:3100$ruta")"
             echo "$ruta -> $resultado"
             if [ "$resultado" != "307 http://localhost:3100/login" ]; then

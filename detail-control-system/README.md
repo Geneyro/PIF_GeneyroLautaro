@@ -120,7 +120,7 @@ Las variables de entorno se definen en `.env.local` para desarrollo (no se versi
 |----------|-------------------|--------------|
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase → *Project Settings → API* → Project URL | Servidor y navegador |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → *Project Settings → API Keys* → clave *publishable* o *anon* | Servidor y navegador |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → *Project Settings → API Keys* → clave *secret* o *service_role* | **Solo servidor.** La Iteración 1 no la usa; queda reservada |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → *Project Settings → API Keys* → clave *secret* o *service_role* | **Solo servidor.** Únicamente para dar de alta usuarios (`src/lib/supabase/admin.ts`) |
 
 Ninguna clave se guarda en el repositorio. La clave `service_role` nunca lleva el prefijo
 `NEXT_PUBLIC_` ni se importa desde código de cliente.
@@ -148,22 +148,17 @@ npx supabase db push
 
 ### Alta de usuarios
 
-No hay registro público. Para cada socio:
+No hay registro público: Supabase Auth tiene el registro deshabilitado (*Authentication → Sign In /
+Providers → Allow new users to sign up*, desactivado). Los usuarios se crean desde la propia
+aplicación, en el servidor:
 
-1. En Supabase → *Authentication → Users → Add user*, crear el usuario con correo y contraseña
-   (marcar *Auto Confirm User*).
-2. En *SQL Editor*, asociarlo a la organización (la primera vez, crear también la organización):
+1. **Puesta en marcha.** Mientras no exista ningún usuario, la pantalla de inicio de sesión muestra
+   el enlace «Crear el primer usuario» (`/registro`), que crea la organización y su primer usuario.
+   En cuanto existe un usuario, esa pantalla se cierra sola y redirige al inicio de sesión.
+2. **Después.** Cualquier usuario con sesión da de alta a otros desde la sección *Usuarios*. El
+   usuario nuevo queda en la misma organización y puede iniciar sesión de inmediato.
 
-```sql
-insert into public.organizacion (nombre) values ('GFK Estética Vehicular');
-
-insert into public.miembro (usuario_id, organizacion_id, nombre)
-select u.id, o.id, 'Yanina'
-  from auth.users u, public.organizacion o
- where u.email = 'correo-de-yanina@ejemplo.com' and o.nombre = 'GFK Estética Vehicular';
-```
-
-En *Authentication → Sign In / Providers* debe quedar desactivado *Allow new users to sign up*.
+La lógica está en `src/lib/usuarios.ts` y usa la clave de servicio, que solo existe en el servidor.
 
 ### Tipos de TypeScript
 
@@ -197,6 +192,7 @@ npm run dev     # http://localhost:3100
 
 | # | Pantalla | Acción | Resultado |
 |---|----------|--------|-----------|
+| 0 | Inicio de sesión (solo la primera vez) | «Crear el primer usuario»; luego, en *Usuarios*, dar de alta al segundo | Los dos socios tienen acceso |
 | 1 | Inicio de sesión | Ingresar con el correo y la contraseña de Yanina | Entra a *Saldos* |
 | 2 | Catálogo | Nuevo insumo, *Líquido (mL)*, presentación *1 L* | El insumo queda con una presentación de 1.000 mL |
 | 3 | Ingresos | Cantidad `5`, unidad `L`, proveedor y costo | «Se registran 5.000 mL». Saldo 5.000 mL |
@@ -215,7 +211,7 @@ npm test
 |---------|--------------|-------------|
 | `tests/db/` | Los criterios de aceptación de RF-23, RF-02, RF-03, RF-01, RF-06, RF-04, RF-05 y RNF-04, e intentos de **violar** cada regla con SQL directo | Siempre. Aplica las migraciones reales sobre un PostgreSQL en memoria (PGlite); no necesita Docker ni conexión |
 | `tests/unidad/` | Lectura y formato de cantidades y dinero sin flotantes | Siempre |
-| `tests/api/` | El caso del bidón de punta a punta contra Supabase Auth y la API, con los dos usuarios | Solo si están definidas `PRUEBAS_SUPABASE_URL` y `PRUEBAS_SUPABASE_ANON_KEY`. **Nunca apuntarlas a producción** |
+| `tests/api/` | El caso del bidón de punta a punta contra Supabase Auth y la API, con los dos usuarios, y el alta de usuarios | Solo si están definidas `PRUEBAS_SUPABASE_URL`, `PRUEBAS_SUPABASE_ANON_KEY` y `PRUEBAS_SUPABASE_SERVICE_ROLE_KEY`. **Nunca apuntarlas a producción** |
 
 `tests/db/soporte/supabase-simulado.sql` reproduce lo mínimo de la plataforma Supabase (roles de la
 API y `auth.uid()`) para las pruebas en memoria.

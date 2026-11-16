@@ -3,7 +3,9 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { formatCantidad, leerEnteroNoNegativo, leerEnteroPositivo, pesosACentavos } from '@/lib/formato';
+import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { crearClienteServidor } from '@/lib/supabase/servidor';
+import { crearPrimerUsuario, crearUsuario } from '@/lib/usuarios';
 import type { Estado, SaldoInsumo } from '@/lib/tipos';
 
 /*
@@ -61,6 +63,49 @@ export async function iniciarSesion(_previo: Estado, fd: FormData): Promise<Esta
 export async function cerrarSesion(): Promise<void> {
   await crearClienteServidor().auth.signOut();
   redirect('/login');
+}
+
+// --- Alta de usuarios (sin registro público) ----------------------------------
+
+function datosUsuario(fd: FormData) {
+  const clave = fd.get('clave');
+  return { nombre: texto(fd, 'nombre'), correo: texto(fd, 'correo'), clave: typeof clave === 'string' ? clave : null };
+}
+
+/** Puesta en marcha: crea la organización y el primer usuario. Solo si no existe ninguno. */
+export async function registrarPrimerUsuario(_previo: Estado, fd: FormData): Promise<Estado> {
+  const resultado = await ejecutar(async () => {
+    const datos = datosUsuario(fd);
+    await crearPrimerUsuario(crearClienteAdmin(), texto(fd, 'organizacion'), datos);
+    const { error } = await crearClienteServidor().auth.signInWithPassword({
+      email: datos.correo!.trim().toLowerCase(),
+      password: datos.clave!,
+    });
+    if (error) return { ok: false, mensaje: 'El usuario se creó. Iniciá sesión con tu correo y contraseña.' };
+    return { ok: true, mensaje: '' };
+  });
+  if (resultado?.ok) redirect('/');
+  return resultado;
+}
+
+/** Un usuario con sesión da de alta a otro, siempre dentro de su propia organización. */
+export async function agregarUsuario(_previo: Estado, fd: FormData): Promise<Estado> {
+  return ejecutar(async () => {
+    const supabase = crearClienteServidor();
+    const { data: sesion } = await supabase.auth.getUser();
+    if (!sesion.user) return { ok: false, mensaje: 'Se requiere una sesión iniciada para operar.' };
+    const { data: miembro } = await supabase
+      .from('miembro')
+      .select('organizacion_id')
+      .eq('usuario_id', sesion.user.id)
+      .maybeSingle();
+    if (!miembro) return { ok: false, mensaje: 'El usuario no pertenece a ninguna organización.' };
+
+    const datos = datosUsuario(fd);
+    await crearUsuario(crearClienteAdmin(), miembro.organizacion_id as string, datos);
+    revalidatePath('/usuarios');
+    return { ok: true, mensaje: `Usuario «${datos.nombre}» creado. Ya puede iniciar sesión con su correo y contraseña.` };
+  });
 }
 
 // --- RF-02 · Alta de insumo con presentaciones --------------------------------

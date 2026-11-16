@@ -9,7 +9,9 @@ import { entornoSupabase } from '@/lib/supabase/entorno';
  * (variables faltantes, error de red) se niega el acceso.
  */
 export async function middleware(request: NextRequest) {
-  const enLogin = request.nextUrl.pathname === '/login';
+  // Únicas rutas visibles sin sesión: el inicio de sesión y la puesta en marcha
+  // (que se cierra sola en cuanto existe el primer usuario).
+  const enLogin = ['/login', '/registro'].includes(request.nextUrl.pathname);
   let respuesta = NextResponse.next({ request });
   let haySesion = false;
 
