@@ -1,24 +1,10 @@
-# dependencias
-/node_modules
+# Cada aplicación (V1/, V2/) tiene su propio .gitignore.
+# Reglas generales para todo el repositorio:
 
-# Next.js
-/.next/
-/out/
-next-env.d.ts
-*.tsbuildinfo
-
-# certificados generados por `next dev --experimental-https`
-/certificates
-
-# variables de entorno (nunca se versionan; solo la plantilla)
+node_modules/
+.next/
+.vercel
 .env*
 !.env.example
-
-# Supabase CLI
-supabase/.branches
-supabase/.temp
-
-# varios
 .DS_Store
 npm-debug.log*
-.vercel

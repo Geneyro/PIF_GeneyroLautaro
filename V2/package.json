@@ -1,0 +1,37 @@
+{
+  "name": "detail-control-system",
+  "version": "0.1.0",
+  "private": true,
+  "description": "DETAIL CONTROL - Control del consumo de insumos y costeo de servicios para centros de estética vehicular",
+  "scripts": {
+    "dev": "next dev --port 3100",
+    "build": "next build",
+    "start": "next start --port 3100",
+    "lint": "next lint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "auth:google": "node --env-file=.env.local scripts/configurar-google.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@supabase/ssr": "^0.12.7",
+    "@supabase/supabase-js": "^2.109.0",
+    "next": "^14.2.35",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "server-only": "^0.0.1"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.16",
+    "@types/node": "^22.20.5",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^14.2.35",
+    "supabase": "^2.119.0",
+    "typescript": "^5.9.3",
+    "vitest": "^5.1.0"
+  }
+}

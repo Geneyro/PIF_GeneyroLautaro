@@ -1,0 +1,23 @@
+# dependencias
+/node_modules
+
+# Next.js
+/.next/
+/out/
+next-env.d.ts
+*.tsbuildinfo
+
+# variables de entorno (nunca se versionan; solo la plantilla)
+.env*
+!.env.example
+
+# Supabase CLI
+/supabase/.branches
+/supabase/.temp
+
+# Vercel
+.vercel
+
+# varios
+.DS_Store
+npm-debug.log*

@@ -1,0 +1,580 @@
+:root {
+  --fondo: #f3f5f8;
+  --superficie: #ffffff;
+  --borde: #d9dee6;
+  --texto: #16202c;
+  --texto-suave: #5a6675;
+  --primario: #0f4c81;
+  --primario-oscuro: #0b3a63;
+  --ok-fondo: #e7f5ec;
+  --ok-borde: #2e8b57;
+  --error-fondo: #fdecec;
+  --error-borde: #c0392b;
+  --aviso-fondo: #fff4d6;
+  --radio: 10px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.5rem;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.1rem;
+}
+
+p {
+  margin: 0 0 0.75rem;
+}
+
+a {
+  color: var(--primario);
+}
+
+.suave {
+  color: var(--texto-suave);
+  font-size: 0.92rem;
+}
+
+.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* --- Cabecera y navegación ------------------------------------------------- */
+.cabecera {
+  background: var(--superficie);
+  border-bottom: 1px solid var(--borde);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.cabecera-fila {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0.6rem 1rem 0.3rem;
+}
+
+.marca {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--primario);
+  margin: 0;
+}
+
+.sesion {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.nav {
+  display: flex;
+  gap: 0.25rem;
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0 0.5rem;
+  overflow-x: auto;
+}
+
+.nav-enlace {
+  padding: 0.55rem 0.75rem;
+  color: var(--texto-suave);
+  text-decoration: none;
+  border-bottom: 3px solid transparent;
+  white-space: nowrap;
+}
+
+.nav-enlace[aria-current='page'] {
+  color: var(--primario);
+  border-bottom-color: var(--primario);
+  font-weight: 600;
+}
+
+.contenido {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+/* --- Tarjetas y disposición -------------------------------------------------- */
+.tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 1rem;
+}
+
+.angosta {
+  max-width: 34rem;
+}
+
+.grilla {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.dos-columnas {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+@media (min-width: 52rem) {
+  .dos-columnas {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
+.vacio {
+  color: var(--texto-suave);
+  padding: 1rem 0;
+}
+
+.etiqueta {
+  display: inline-block;
+  padding: 0.05rem 0.45rem;
+  border-radius: 999px;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  font-size: 0.8rem;
+}
+
+.etiqueta-aviso {
+  background: var(--aviso-fondo);
+}
+
+/* --- Saldos ---------------------------------------------------------------------- */
+.saldo {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 0.5rem;
+}
+
+.saldo .suave {
+  font-weight: 400;
+}
+
+.desglose {
+  margin: 0 0 0.75rem;
+}
+
+.desglose div {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.15rem 0;
+  font-size: 0.92rem;
+}
+
+.desglose dt {
+  color: var(--texto-suave);
+}
+
+.desglose dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.tabla-contenedor {
+  overflow-x: auto;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+th,
+td {
+  padding: 0.35rem 0.4rem;
+  border-top: 1px solid var(--borde);
+  text-align: left;
+}
+
+th {
+  color: var(--texto-suave);
+  font-weight: 600;
+}
+
+th.num {
+  text-align: right;
+}
+
+/* --- Formularios ------------------------------------------------------------------ */
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.form-linea {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.fila {
+  display: flex;
+  gap: 0.6rem;
+}
+
+.campo {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+}
+
+.campo-corto {
+  flex: 0 0 7rem;
+}
+
+.campo > span,
+.campo > legend {
+  font-size: 0.88rem;
+  font-weight: 600;
+  padding: 0;
+}
+
+input[type='text'],
+input[type='email'],
+input[type='password'],
+select {
+  width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: #fff;
+  color: var(--texto);
+  font: inherit;
+}
+
+input:focus-visible,
+select:focus-visible,
+button:focus-visible,
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid #7fb2e0;
+  outline-offset: 1px;
+}
+
+.opciones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.opcion {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0.3rem 0.75rem;
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.ayuda {
+  margin: -0.35rem 0 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.boton {
+  min-height: 2.75rem;
+  padding: 0.55rem 1.1rem;
+  border: 1px solid var(--primario);
+  border-radius: 8px;
+  background: var(--primario);
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.boton:hover {
+  background: var(--primario-oscuro);
+}
+
+.boton:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.boton-secundario {
+  background: #fff;
+  color: var(--primario);
+}
+
+.boton-secundario:hover {
+  background: var(--fondo);
+}
+
+.boton-chico {
+  min-height: 2.25rem;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.9rem;
+}
+
+/* --- Avisos y balance --------------------------------------------------------------- */
+.aviso {
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  border-left: 5px solid;
+  flex-basis: 100%;
+}
+
+.aviso p {
+  margin: 0.15rem 0 0;
+}
+
+.aviso-ok {
+  background: var(--ok-fondo);
+  border-color: var(--ok-borde);
+}
+
+.aviso-error {
+  background: var(--error-fondo);
+  border-color: var(--error-borde);
+}
+
+.aviso-detalle {
+  font-size: 0.92rem;
+  color: var(--texto-suave);
+}
+
+.balance {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.7rem 0.85rem;
+  border-radius: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance-ok {
+  background: var(--ok-fondo);
+}
+
+.balance-mal {
+  background: var(--aviso-fondo);
+}
+
+/* --- Listas y movimientos ---------------------------------------------------------- */
+.lista,
+.operaciones,
+.lineas {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.lista > li {
+  padding: 0.75rem 0;
+  border-top: 1px solid var(--borde);
+}
+
+.lista > li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.lista p {
+  margin: 0.15rem 0 0;
+}
+
+.operaciones {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.operacion p {
+  margin: 0.15rem 0 0.4rem;
+}
+
+.operacion-cabecera {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.lineas li {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.3rem 0;
+  border-top: 1px solid var(--borde);
+}
+
+.corregir {
+  margin-top: 0.5rem;
+}
+
+.corregir summary {
+  cursor: pointer;
+  color: var(--primario);
+  font-weight: 600;
+  width: fit-content;
+  padding: 0.3rem 0;
+}
+
+/* --- Inicio de sesión ---------------------------------------------------------------- */
+/*
+ * Pantalla angosta: «DETAIL CONTROL» va por encima de la tarjeta.
+ * Pantalla ancha: el marco completo es la tarjeta y el título queda alineado
+ * a la izquierda en su parte superior.
+ */
+.auth {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: 1.5rem 1rem;
+}
+
+.auth-marco {
+  width: 100%;
+  max-width: 26rem;
+}
+
+.auth-marca {
+  margin: 0 0 0.85rem;
+  text-align: left;
+  font-size: 1.35rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--primario);
+}
+
+.auth-tarjeta {
+  background: var(--superficie);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 1.5rem 1.25rem;
+}
+
+.auth-tarjeta h1 {
+  margin: 0 0 1rem;
+  font-size: 1.3rem;
+}
+
+.auth-tarjeta .boton {
+  width: 100%;
+}
+
+.auth-pie {
+  margin: 1.25rem 0 0;
+  text-align: center;
+  color: var(--texto-suave);
+  font-size: 0.95rem;
+}
+
+.auth-pie a,
+.enlace-olvido {
+  font-weight: 600;
+}
+
+.enlace-olvido {
+  align-self: flex-end;
+  margin-top: -0.35rem;
+  font-size: 0.9rem;
+}
+
+@media (min-width: 40rem) {
+  .auth-marco {
+    max-width: 28rem;
+    background: var(--superficie);
+    border: 1px solid var(--borde);
+    border-radius: var(--radio);
+    padding: 2rem 2rem 1.75rem;
+    box-shadow: 0 8px 24px rgb(22 32 44 / 6%);
+  }
+
+  .auth-marca {
+    margin-bottom: 1.5rem;
+  }
+
+  .auth-tarjeta {
+    background: none;
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+  }
+}
+
+.separador {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin: 1.1rem 0;
+  color: var(--texto-suave);
+  font-size: 0.9rem;
+}
+
+.separador::before,
+.separador::after {
+  content: '';
+  flex: 1;
+  border-top: 1px solid var(--borde);
+}
+
+.boton-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  background: #fff;
+  color: var(--texto);
+  border-color: var(--borde);
+}
+
+.boton-google:hover {
+  background: var(--fondo);
+}
+
+.campo-rol {
+  flex: 0 0 10rem;
+}
+
+@media (max-width: 30rem) {
+  .sesion .suave {
+    display: none;
+  }
+}
