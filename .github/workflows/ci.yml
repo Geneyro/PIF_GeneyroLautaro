@@ -9,6 +9,11 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# El prototipo vive en V1/ (DETAIL CONTROL está en V2/ y tiene su propio flujo).
+defaults:
+  run:
+    working-directory: V1
+
 jobs:
   # ---------------------------------------------------------------------------
   # Aplicación Next.js: instala dependencias, analiza y construye.
@@ -25,6 +30,7 @@ jobs:
         with:
           node-version: 20
           cache: npm
+          cache-dependency-path: V1/package-lock.json
 
       - name: Instalar dependencias
         run: npm ci

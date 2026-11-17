@@ -1,15 +1,15 @@
 name: DETAIL CONTROL
 
-# Solo se ejecuta cuando cambian archivos de detail-control-system/ (o este
+# Solo se ejecuta cuando cambian archivos de V2/ (o este
 # mismo flujo). No interviene en el flujo del prototipo (ci.yml).
 on:
   push:
     paths:
-      - 'detail-control-system/**'
+      - 'V2/**'
       - '.github/workflows/detail-control.yml'
   pull_request:
     paths:
-      - 'detail-control-system/**'
+      - 'V2/**'
       - '.github/workflows/detail-control.yml'
 
 concurrency:
@@ -18,7 +18,7 @@ concurrency:
 
 defaults:
   run:
-    working-directory: detail-control-system
+    working-directory: V2
 
 jobs:
   verificar:
@@ -34,7 +34,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: detail-control-system/package-lock.json
+          cache-dependency-path: V2/package-lock.json
 
       - name: Instalar dependencias
         run: npm ci

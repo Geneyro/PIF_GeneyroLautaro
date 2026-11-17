@@ -71,7 +71,7 @@ desvío (RF-09), y el resto de la especificación.
 ```
 
 ```
-detail-control-system/
+V2/
 ├── src/
 │   ├── app/                    Rutas, Server Actions y estilos
 │   ├── components/             Formularios y navegación
@@ -104,7 +104,7 @@ Las líneas de un fraccionamiento **suman 0**: esa es la conservación de cantid
 Requisitos: Node.js 20 o superior.
 
 ```bash
-cd detail-control-system
+cd V2
 npm ci
 ```
 
@@ -266,7 +266,7 @@ GitHub.
 
 ### Vercel
 
-- Proyecto propio, distinto del proyecto del prototipo, con **Root Directory = `detail-control-system`**.
+- Proyecto propio, distinto del proyecto del prototipo, con **Root Directory = `V2`**.
 - Variables de entorno de la sección 4 cargadas en Production y Preview.
 - Cada rama genera un despliegue de vista previa; `main` despliega a producción.
 
