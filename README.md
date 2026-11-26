@@ -119,9 +119,9 @@ Vive en el repositorio `PIF_GeneyroLautaro` y en la carpeta AE4 del Portafolio D
 | Íconos | `lucide-react` | 0.460.0 |
 | Tests | Vitest + PGlite (PostgreSQL en memoria) | 5.1.0 / 0.5.16 |
 | Análisis estático | ESLint (`eslint-config-next`) | 8.57.1 |
-| Autenticación | Supabase Auth: correo y contraseña con bcrypt, sesión en cookies | No aplica |
-| Despliegue | Vercel (aplicación) y Supabase Cloud (base, Auth y API) | No aplica |
-| CI | GitHub Actions | No aplica |
+| Autenticación | Supabase Auth: correo y contraseña con bcrypt, sesión en cookies | - |
+| Despliegue | Vercel (aplicación) y Supabase Cloud (base, Auth y API) | - |
+| CI | GitHub Actions | - |
 
 **Criterios de elección:** un solo lenguaje en el frontend y el backend; Supabase resuelve autenticación, contraseñas con bcrypt y seguridad por fila sin escribir un backend propio; PostgreSQL ofrece transacciones, restricciones y triggers, imprescindibles para la regla de conservación; Vercel da despliegue automático por rama con HTTPS incluido; todo tiene planes gratuitos para el desarrollo (la operación comercial requiere el plan Pro de Vercel, ver el Capítulo X del informe).
 
