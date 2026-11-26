@@ -38,7 +38,7 @@ del prototipo.
 | **RF-05** Inmutabilidad | Los movimientos no se editan ni se borran; se corrigen con una compensación que referencia al original | triggers `trg_movimiento_bloquear_*`, `compensar_operacion()` |
 | Dashboard General | Saldos a granel en mL, resumen visual por insumo y alertas de reposición según el punto de pedido | vista `v_saldo_insumo` (columnas `punto_pedido`, `reponer`), `definir_punto_pedido()` |
 | Motor de Fraccionamiento | Del granel a una o varias presentaciones, sin merma; el stock restante se ve mientras se carga | `fraccionar()` |
-| Insumos | Conteo físico por insumo contra el saldo del sistema (la diferencia se ajusta con un movimiento `AJUSTE` atribuido); alta de insumos con las cinco presentaciones, eliminación (baja lógica) y punto de pedido | `registrar_conteo()`, `agregar_insumo()`, `cambiar_estado_insumo()`, `definir_punto_pedido()` |
+| Insumos | Conteo físico por insumo contra el saldo del sistema (la diferencia se ajusta con un movimiento `AJUSTE` atribuido); punto de pedido; alta de insumos con las cinco presentaciones y eliminación (baja lógica), solo para administradores | `registrar_conteo()`, `agregar_insumo()`, `cambiar_estado_insumo()`, `definir_punto_pedido()` |
 | Servicios | Nombre del servicio, tipo de vehículo y receta (insumo + mL); cada insumo se descuenta con un movimiento `CONSUMO` | `registrar_servicio()`, tabla `servicio` |
 | Movimientos | Libro de auditoría unificado de todas las operaciones, filtrable por origen; una operación se anula con una compensación | vista `v_movimiento`, `src/lib/registro.ts` |
 | **RNF-02** HTTPS | Cabecera HSTS y cabeceras de seguridad | `next.config.mjs` |
@@ -149,6 +149,7 @@ Ninguna clave se guarda en el repositorio. La clave `service_role` nunca lleva e
 | `20261125000001_tipos_taller.sql` | Tipos de movimiento `AJUSTE` y `CONSUMO` (archivo propio: un valor nuevo de enum no se usa en la misma transacción) |
 | `20261125000002_pestanas.sql` | Punto de pedido, fraccionamiento sin merma, conteo físico, servicios, vistas, permisos y catálogo de GFK (Mekasil Tradicional y Ultra, BB Tradicional y Ultra, Citrolimp, Shampoo Siliconado) para las organizaciones existentes |
 | `20261126000001_insumos.sql` | Las cinco presentaciones (1, 5, 20, 60 y 120 L) para todo insumo y `agregar_insumo()`, que reactiva un insumo eliminado con el mismo nombre |
+| `20261126000002_insumos_solo_administradores.sql` | Agregar y eliminar insumos queda reservado a los administradores; los operarios conservan conteo, fraccionamiento, servicios y punto de pedido |
 
 Aplicarlas al proyecto remoto (pide la contraseña de la base):
 

@@ -282,10 +282,10 @@ describe('Insumos · agregar y eliminar', () => {
     );
 
   it('un insumo nuevo tiene las cinco presentaciones, de 1 a 120 L', async () => {
-    const id = await agregar(GUIDO, '  Insumo nuevo ');
+    const id = await agregar(YANINA, '  Insumo nuevo ');
     expect(await capacidades(id)).toEqual([1000, 5000, 20000, 60000, 120000]);
     const [i] = await b.admin('select nombre, unidad_base, creado_por from public.insumo where id = $1', [id]);
-    expect(i).toEqual({ nombre: 'Insumo nuevo', unidad_base: 'mL', creado_por: GUIDO });
+    expect(i).toEqual({ nombre: 'Insumo nuevo', unidad_base: 'mL', creado_por: YANINA });
   });
 
   it('los insumos existentes recibieron las presentaciones que les faltaban', async () => {
@@ -304,16 +304,28 @@ describe('Insumos · agregar y eliminar', () => {
     const visibles = await b.como(GUIDO, (q) => q('select 1 from public.v_saldo_insumo where insumo_id = $1 and activo', [id]));
     expect(visibles).toHaveLength(0);
 
-    expect(await agregar(GUIDO, 'INSUMO A ELIMINAR')).toBe(id);
+    expect(await agregar(YANINA, 'INSUMO A ELIMINAR')).toBe(id);
     expect((await b.saldo(YANINA, id)).granel).toBe(5000);
   });
 
   it('rechaza nombres vacíos, repetidos, unidades inválidas y usuarios sin sesión', async () => {
     await agregar(YANINA, 'Insumo repetido');
-    expect(await rechazo(agregar(GUIDO, 'insumo REPETIDO'))).toMatch(/Ya existe un insumo llamado "insumo REPETIDO"/);
+    expect(await rechazo(agregar(YANINA, 'insumo REPETIDO'))).toMatch(/Ya existe un insumo llamado "insumo REPETIDO"/);
     expect(await rechazo(agregar(YANINA, '   '))).toMatch(/nombre del insumo/);
     expect(await rechazo(agregar(YANINA, 'x'.repeat(81)))).toMatch(/hasta 80/);
     expect(await rechazo(agregar(YANINA, 'Unidad rara', 'L'))).toMatch(/mL o g/);
     expect(await rechazo(b.como(null, (q) => q("select public.agregar_insumo('X')")))).toMatch(/permission denied/i);
+  });
+
+  it('un operario no puede agregar ni eliminar insumos, pero sí definir el punto de pedido', async () => {
+    const id = await agregar(YANINA, 'Insumo del administrador');
+    expect(await rechazo(agregar(GUIDO, 'Insumo del operario'))).toMatch(/Solo un administrador puede agregar o eliminar insumos/);
+    expect(await rechazo(b.como(GUIDO, (q) => q('select public.cambiar_estado_insumo($1, false)', [id])))).toMatch(
+      /Solo un administrador/,
+    );
+    expect(await b.admin("select 1 from public.insumo where nombre = 'Insumo del operario'")).toHaveLength(0);
+    expect((await b.admin('select activo from public.insumo where id = $1', [id]))[0].activo).toBe(true);
+
+    await b.como(GUIDO, (q) => q('select public.definir_punto_pedido($1, $2)', [id, 1000]));
   });
 });

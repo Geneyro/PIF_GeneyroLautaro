@@ -178,7 +178,7 @@ function textos(fd: FormData, campo: string): string[] {
  */
 function mensajeAmigable(error: ErrorBase & { code?: string }): Estado {
   const tecnico = /violates|constraint|operación [0-9a-f-]{36}|syntax|function|column|relation|permission|null value/i;
-  const propio = ['P0001', 'P0002', '22023', '23505'].includes(error.code ?? '') && !tecnico.test(error.message);
+  const propio = ['P0001', 'P0002', '22023', '23505', '42501'].includes(error.code ?? '') && !tecnico.test(error.message);
   return {
     ok: false,
     mensaje: propio ? error.message : 'No se pudo registrar la operación. Revisá los datos e intentá de nuevo.',

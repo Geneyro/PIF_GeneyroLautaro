@@ -1,17 +1,32 @@
 import { FilaConteo } from '@/components/FilaConteo';
 import { FormAgregarInsumo, FormEliminarInsumo, FormPuntoPedido } from '@/components/FormAjustesInsumo';
-import { cargarConteos, cargarSaldos } from '@/lib/datos';
+import { cargarConteos, cargarSaldos, miembroActual } from '@/lib/datos';
 import { formatBase, formatFechaHora, formatPresentacion } from '@/lib/formato';
+import { usuarioActual } from '@/lib/supabase/servidor';
 
-/** Insumos · conteo físico, ajuste del stock, alta y eliminación de insumos. */
+/**
+ * Insumos · conteo físico, ajuste del stock y punto de pedido. Agregar o
+ * eliminar insumos se muestra solo a los administradores (la base también lo
+ * exige).
+ */
 export default async function Insumos() {
-  const [{ insumos, presentaciones }, conteos] = await Promise.all([cargarSaldos(), cargarConteos()]);
+  const usuario = await usuarioActual();
+  const [{ insumos, presentaciones }, conteos, miembro] = await Promise.all([
+    cargarSaldos(),
+    cargarConteos(),
+    usuario ? miembroActual(usuario.id) : Promise.resolve(null),
+  ]);
+  const administra = miembro?.rol === 'ADMINISTRADOR';
 
   return (
     <>
       <div className="titulo">
         <h1>Insumos</h1>
-        <p className="suave">Conteo físico de cada insumo a granel, ajuste del stock y alta o eliminación de insumos.</p>
+        <p className="suave">
+          {administra
+            ? 'Conteo físico de cada insumo a granel, ajuste del stock y alta o eliminación de insumos.'
+            : 'Conteo físico de cada insumo a granel, ajuste del stock y punto de pedido.'}
+        </p>
       </div>
 
       <section className="tarjeta tarjeta-tabla" aria-labelledby="titulo-conteo">
@@ -19,7 +34,9 @@ export default async function Insumos() {
           <h2 id="titulo-conteo">Conteo físico</h2>
         </div>
         {insumos.length === 0 ? (
-          <p className="vacio">Todavía no hay insumos. Agregalos más abajo.</p>
+          <p className="vacio">
+            {administra ? 'Todavía no hay insumos. Agregalos más abajo.' : 'Todavía no hay insumos. Un administrador debe agregarlos.'}
+          </p>
         ) : (
           <div className="tabla-contenedor">
             <table className="tabla-conteo">
@@ -44,11 +61,13 @@ export default async function Insumos() {
 
       <section className="tarjeta tarjeta-tabla" aria-labelledby="titulo-administrar">
         <div className="tarjeta-cabecera">
-          <h2 id="titulo-administrar">Agregar o eliminar insumos</h2>
+          <h2 id="titulo-administrar">{administra ? 'Agregar o eliminar insumos' : 'Punto de pedido'}</h2>
         </div>
-        <div className="tarjeta-cuerpo">
-          <FormAgregarInsumo />
-        </div>
+        {administra ? (
+          <div className="tarjeta-cuerpo">
+            <FormAgregarInsumo />
+          </div>
+        ) : null}
         {insumos.length > 0 ? (
           <div className="tabla-contenedor">
             <table>
@@ -57,9 +76,11 @@ export default async function Insumos() {
                   <th>Insumo</th>
                   <th>Presentaciones</th>
                   <th>Punto de pedido</th>
-                  <th>
-                    <span className="oculto">Eliminar</span>
-                  </th>
+                  {administra ? (
+                    <th>
+                      <span className="oculto">Eliminar</span>
+                    </th>
+                  ) : null}
                 </tr>
               </thead>
               <tbody>
@@ -77,9 +98,11 @@ export default async function Insumos() {
                     <td>
                       <FormPuntoPedido insumoId={i.insumo_id} nombre={i.nombre} unidadBase={i.unidad_base} actual={i.punto_pedido} />
                     </td>
-                    <td className="num">
-                      <FormEliminarInsumo insumoId={i.insumo_id} nombre={i.nombre} />
-                    </td>
+                    {administra ? (
+                      <td className="num">
+                        <FormEliminarInsumo insumoId={i.insumo_id} nombre={i.nombre} />
+                      </td>
+                    ) : null}
                   </tr>
                 ))}
               </tbody>
