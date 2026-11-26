@@ -8,8 +8,6 @@ export const dynamic = 'force-dynamic';
 
 const ERRORES: Record<string, string> = {
   enlace: 'El enlace no es válido o ya venció. Pide uno nuevo desde «¿Olvidaste tu contraseña?».',
-  google: 'No se pudo iniciar sesión con Google. Inténtalo de nuevo.',
-  'google-no-configurado': 'El inicio de sesión con Google todavía no está habilitado. Usa tu correo y contraseña.',
 };
 
 export default function Login({ searchParams }: { searchParams: { error?: string } }) {

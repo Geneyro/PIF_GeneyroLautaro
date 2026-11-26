@@ -29,7 +29,7 @@ del prototipo.
 | Requisito | Qué hace | Dónde se impone |
 |-----------|----------|-----------------|
 | **RF-23** Autenticación | Inicio y cierre de sesión; nada funciona sin sesión; cada movimiento guarda el ID del usuario | `src/middleware.ts`, políticas de seguridad por fila, trigger `trg_movimiento_atribuir` |
-| Cuentas | Registro con rol (Administrador / Operario), inicio con Google, recuperación de contraseña por correo; toda cuenta nueva espera la aprobación de un administrador | `src/lib/cuentas.ts`, `src/app/acciones.ts`, migración `cuentas_y_roles` |
+| Cuentas | Registro con rol (Administrador / Operario), inicio de sesión con correo y contraseña, recuperación de contraseña por correo; toda cuenta nueva espera la aprobación de un administrador | `src/lib/cuentas.ts`, `src/app/acciones.ts`, migración `cuentas_y_roles` |
 | **RF-02** Catálogo | Alta de insumo con unidad base (mL o g) y presentaciones de 1, 5, 20, 60 o 120 L | `crear_insumo()`, `agregar_presentacion()` |
 | **RF-03** Ingreso | Ingreso convertido a unidad base, con proveedor y costo obligatorios | `registrar_ingreso()` |
 | **RF-01** Fraccionamiento | Rechaza lo que no conserva la cantidad o excede el saldo, e informa la cantidad no explicada | `registrar_fraccionamiento()`, trigger `trg_movimiento_invariantes` |
@@ -136,20 +136,6 @@ Las variables de entorno se definen en `.env.local` para desarrollo (no se versi
 Ninguna clave se guarda en el repositorio. La clave `service_role` nunca lleva el prefijo
 `NEXT_PUBLIC_` ni se importa desde código de cliente.
 
-**Google OAuth.** `GOOGLE_CLIENT_ID` y `GOOGLE_CLIENT_SECRET` no van en Vercel: con Supabase Auth,
-las credenciales de Google se guardan en Supabase, que es quien habla con Google. Para habilitar
-«Continuar con Google»:
-
-1. En Google Cloud Console → *APIs y servicios → Credenciales*, crear un **ID de cliente de OAuth**
-   de tipo *Aplicación web*, con la URI de redirección autorizada
-   `https://<reference-id>.supabase.co/auth/v1/callback`.
-2. Completar en `.env.local` `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `SUPABASE_ACCESS_TOKEN` y
-   `SUPABASE_PROJECT_REF` (ver `.env.example`).
-3. Ejecutar `npm run auth:google`. El script habilita Google en Supabase y permite que cree cuentas
-   nuevas, que igual quedan pendientes de aprobación.
-
-Mientras Google no esté habilitado, el botón muestra un aviso en lugar de fallar.
-
 ## 5. Base de datos
 
 ### Migraciones
@@ -179,7 +165,7 @@ npx supabase db push
 
 | Pantalla | Qué hace |
 |----------|----------|
-| `/login` | Correo electrónico y contraseña, «¿Olvidaste tu contraseña?» y «Continuar con Google» |
+| `/login` | Correo electrónico y contraseña, y «¿Olvidaste tu contraseña?». No hay inicio con Google: se quitó a pedido del cliente |
 | `/registro` | Nombre completo, correo, contraseña (dos veces) y rol: Administrador u Operario |
 | `/recuperar` | Envía por correo un enlace seguro, de un solo uso, para restablecer la contraseña |
 | `/restablecer` | Se abre desde ese enlace y guarda la contraseña nueva |
@@ -187,7 +173,7 @@ npx supabase db push
 
 Reglas:
 
-- **Registro con aprobación.** Toda cuenta nueva, del formulario o de Google, queda como solicitud
+- **Registro con aprobación.** Toda cuenta nueva queda como solicitud
   de acceso y no ve ni opera ningún dato hasta que un administrador la aprueba. El rol elegido al
   registrarse es un pedido: lo confirma quien aprueba. Lo impone la base (trigger sobre
   `auth.users`, tabla `solicitud_acceso` y políticas por fila), no la interfaz.

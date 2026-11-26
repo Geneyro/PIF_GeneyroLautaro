@@ -6,7 +6,6 @@ import { redirect } from 'next/navigation';
 import { normalizarCorreo, registrarCuenta, validarClave, validarRegistro } from '@/lib/cuentas';
 import { formatBase, formatCantidad, leerEnteroNoNegativo, leerEnteroPositivo } from '@/lib/formato';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
-import { entornoSupabase } from '@/lib/supabase/entorno';
 import { crearClienteServidor } from '@/lib/supabase/servidor';
 import type { Estado, SaldoInsumo } from '@/lib/tipos';
 
@@ -116,37 +115,6 @@ export async function crearCuenta(_previo: Estado, fd: FormData): Promise<Estado
   });
   if (resultado?.ok && resultado.mensaje === '') redirect('/');
   return resultado;
-}
-
-/** ¿Está habilitado el proveedor Google en Supabase Auth? */
-async function googleHabilitado(): Promise<boolean> {
-  const entorno = entornoSupabase();
-  if (!entorno) return false;
-  try {
-    const respuesta = await fetch(`${entorno.url}/auth/v1/settings`, {
-      headers: { apikey: entorno.clave },
-      cache: 'no-store',
-    });
-    if (!respuesta.ok) return false;
-    const ajustes = (await respuesta.json()) as { external?: { google?: boolean } };
-    return ajustes.external?.google === true;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * «Continuar con Google». Si el correo no tiene cuenta, Supabase la crea y
- * queda como solicitud de acceso, igual que una cuenta del formulario.
- */
-export async function continuarConGoogle(): Promise<void> {
-  if (!(await googleHabilitado())) redirect('/login?error=google-no-configurado');
-  const { data, error } = await crearClienteServidor().auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: `${origenDeLaPeticion()}/auth/callback` },
-  });
-  if (error || !data.url) redirect('/login?error=google');
-  redirect(data.url);
 }
 
 /** Envía el correo con el enlace seguro para restablecer la contraseña. */

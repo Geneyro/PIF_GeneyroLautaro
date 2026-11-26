@@ -9,8 +9,7 @@
     "start": "next start --port 3100",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run",
-    "auth:google": "node --env-file=.env.local scripts/configurar-google.mjs"
+    "test": "vitest run"
   },
   "engines": {
     "node": ">=20"

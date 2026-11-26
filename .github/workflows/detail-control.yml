@@ -131,7 +131,7 @@ jobs:
             [ "$codigo" = "200" ] || fallar "La ruta $ruta no responde 200."
           done
           grep -q 'Iniciar sesión' <(curl -s http://localhost:3100/login) || fallar "Falta «Iniciar sesión»."
-          grep -q 'Continuar con Google' <(curl -s http://localhost:3100/login) || fallar "Falta «Continuar con Google»."
+          if curl -s http://localhost:3100/login | grep -q 'Continuar con Google'; then fallar "El inicio de sesión no debe ofrecer Google."; fi
           grep -q 'Crear cuenta' <(curl -s http://localhost:3100/registro) || fallar "Falta «Crear cuenta»."
 
           # La vuelta de Supabase sin código válido vuelve al inicio con un aviso.
