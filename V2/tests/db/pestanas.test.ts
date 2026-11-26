@@ -198,19 +198,31 @@ describe('Servicios · receta de consumo', () => {
 });
 
 // -----------------------------------------------------------------------------
-describe('Dashboard · punto de pedido', () => {
-  it('marca para reponer cuando el granel llega al punto de pedido', async () => {
-    const insumo = await nuevoInsumoConStock('Dash reposición', 5);
-    const reponer = async () =>
-      (await b.como(YANINA, (q) => q('select reponer from public.v_saldo_insumo where insumo_id = $1', [insumo])))[0].reponer;
+describe('Dashboard · reposición', () => {
+  const reponer = async (insumo: string) =>
+    (await b.como(YANINA, (q) => q('select reponer from public.v_saldo_insumo where insumo_id = $1', [insumo])))[0].reponer;
 
-    expect(await reponer()).toBe(false);
-    await b.como(GUIDO, (q) => q('select public.definir_punto_pedido($1, $2)', [insumo, 4000]));
-    expect(await reponer()).toBe(false);
+  it('marca para reponer todo insumo con menos de 100 L a granel', async () => {
+    const insumo = await nuevoInsumoConStock('Dash 100 L', 101);
+    expect(await reponer(insumo)).toBe(false);
     await servicio(GUIDO, 'Lavado', 'SUV', [insumo], [1000]);
-    expect(await reponer()).toBe(true);
+    expect(await reponer(insumo)).toBe(false); // 100 L justos: todavía no
+    await servicio(GUIDO, 'Lavado', 'SUV', [insumo], [1]);
+    expect(await reponer(insumo)).toBe(true);
+
+    const vacio = await b.crearInsumo(YANINA, 'Dash sin stock', 'mL', [1]);
+    expect(await reponer(vacio)).toBe(true);
+  });
+
+  it('un punto de pedido mayor que 100 L adelanta la alerta', async () => {
+    const insumo = await nuevoInsumoConStock('Dash reposición', 150);
+    expect(await reponer(insumo)).toBe(false);
+    await b.como(GUIDO, (q) => q('select public.definir_punto_pedido($1, $2)', [insumo, 140000]));
+    expect(await reponer(insumo)).toBe(false);
+    await servicio(GUIDO, 'Lavado', 'SUV', [insumo], [10000]);
+    expect(await reponer(insumo)).toBe(true);
     await b.como(YANINA, (q) => q('select public.definir_punto_pedido($1, null)', [insumo]));
-    expect(await reponer()).toBe(false);
+    expect(await reponer(insumo)).toBe(false);
     expect(await rechazo(b.como(YANINA, (q) => q('select public.definir_punto_pedido($1, 0)', [insumo])))).toMatch(/mayor que 0/);
   });
 

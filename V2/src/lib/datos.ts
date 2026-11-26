@@ -60,7 +60,7 @@ export async function cargarConteos(limite = 20): Promise<ConteoFisico[]> {
   return (data ?? []) as ConteoFisico[];
 }
 
-/** Cantidad de insumos activos en el punto de pedido (insignia del menú). */
+/** Cantidad de insumos activos para reponer (insignia del menú). */
 export async function contarAlertas(): Promise<number> {
   const { count } = await crearClienteServidor()
     .from('v_saldo_insumo')

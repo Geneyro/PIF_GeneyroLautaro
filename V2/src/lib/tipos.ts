@@ -17,7 +17,7 @@ export interface SaldoInsumo {
   saldo_total: number;
   merma_acumulada: number;
   creado_en: string;
-  /** Saldo a granel por debajo del cual hay que reponer. Null: sin alerta. */
+  /** Mínimo propio del insumo; la alerta salta también por debajo de 100 L. Null: solo rige 100 L. */
   punto_pedido: number | null;
   reponer: boolean;
 }

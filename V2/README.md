@@ -36,7 +36,7 @@ del prototipo.
 | **RF-06** Merma | La merma de un fraccionamiento exige motivo | `registrar_fraccionamiento()`, restricción `movimiento_forma_valida` |
 | **RF-04** Saldo | Saldo en unidad base y equivalente por presentación; siempre es la suma de los movimientos | vistas `v_saldo_insumo`, `v_saldo_presentacion` |
 | **RF-05** Inmutabilidad | Los movimientos no se editan ni se borran; se corrigen con una compensación que referencia al original | triggers `trg_movimiento_bloquear_*`, `compensar_operacion()` |
-| Dashboard General | Saldos a granel en mL, resumen visual por insumo y alertas de reposición según el punto de pedido | vista `v_saldo_insumo` (columnas `punto_pedido`, `reponer`), `definir_punto_pedido()` |
+| Dashboard General | Saldos a granel en mL, resumen visual por insumo y alertas de reposición para todo insumo con menos de 100 L a granel (o en su punto de pedido, si es mayor), con la cantidad y los nombres de los insumos a reponer | vista `v_saldo_insumo` (columnas `punto_pedido`, `reponer`), `definir_punto_pedido()` |
 | Motor de Fraccionamiento | Del granel a una o varias presentaciones, sin merma; el stock restante se ve mientras se carga | `fraccionar()` |
 | Insumos | Conteo físico por insumo contra el saldo del sistema (la diferencia se ajusta con un movimiento `AJUSTE` atribuido); punto de pedido; alta de insumos con las cinco presentaciones y eliminación (baja lógica), solo para administradores | `registrar_conteo()`, `agregar_insumo()`, `cambiar_estado_insumo()`, `definir_punto_pedido()` |
 | Servicios | Nombre del servicio, tipo de vehículo y receta (insumo + mL); cada insumo se descuenta con un movimiento `CONSUMO` | `registrar_servicio()`, tabla `servicio` |
@@ -150,6 +150,7 @@ Ninguna clave se guarda en el repositorio. La clave `service_role` nunca lleva e
 | `20261125000002_pestanas.sql` | Punto de pedido, fraccionamiento sin merma, conteo físico, servicios, vistas, permisos y catálogo de GFK (Mekasil Tradicional y Ultra, BB Tradicional y Ultra, Citrolimp, Shampoo Siliconado) para las organizaciones existentes |
 | `20261126000001_insumos.sql` | Las cinco presentaciones (1, 5, 20, 60 y 120 L) para todo insumo y `agregar_insumo()`, que reactiva un insumo eliminado con el mismo nombre |
 | `20261126000002_insumos_solo_administradores.sql` | Agregar y eliminar insumos queda reservado a los administradores; los operarios conservan conteo, fraccionamiento, servicios y punto de pedido |
+| `20261126000003_reposicion_100_litros.sql` | La alerta de reposición salta con menos de 100 L (100.000 mL) a granel, o al llegar al punto de pedido si es mayor |
 
 Aplicarlas al proyecto remoto (pide la contraseña de la base):
 
@@ -233,9 +234,9 @@ npm run dev     # http://localhost:3100
 |---|----------|--------|-----------|
 | 0 | Registro (solo la primera vez) | Yanina crea su cuenta en «Regístrate» y queda como administradora | Yanina tiene acceso |
 | 1 | Inicio de sesión | Ingresar con el correo y la contraseña de Yanina | Entra al *Dashboard General* |
-| 2 | Insumos | Punto de pedido de Citrolimp: `4000` mL | Aparece la alerta «Reponer Citrolimp» (saldo 0) |
-| 3 | Insumos | Conteo físico de Citrolimp: `5000` | «Stock ajustado +5.000 mL». Dashboard: 5.000 mL a granel, estado *Normal* |
-| 4 | Motor de Fraccionamiento | Citrolimp, *1 L* × `2` | Mientras se carga: «Se descuenta −2.000 mL · Quedará 3.000 mL». Al confirmar, el Dashboard muestra 3.000 mL y la alerta *Reponer Citrolimp* |
+| 2 | Dashboard General | Ver *Alertas de reposición* | Citrolimp figura para reponer: tiene menos de 100 L a granel (saldo 0) |
+| 3 | Insumos | Conteo físico de Citrolimp: `5000` | «Stock ajustado +5.000 mL». Dashboard: 5.000 mL a granel; sigue en *Reponer* porque está por debajo de 100 L |
+| 4 | Motor de Fraccionamiento | Citrolimp, *1 L* × `2` | Mientras se carga: «Se descuenta −2.000 mL · Quedará 3.000 mL». Al confirmar, el Dashboard muestra 3.000 mL a granel |
 | 5 | Servicios | «Lavado premium», «SUV», Citrolimp `100` mL | El Dashboard baja a 2.900 mL; Movimientos muestra el consumo con el servicio y el usuario |
 | 6 | Insumos | Conteo físico de Citrolimp: `2850` | «Stock ajustado −50 mL»; el ajuste queda atribuido en Movimientos |
 | 7 | Movimientos | *Anular* una operación, con motivo | Se agrega una corrección; el original queda intacto y marcado como anulado |
@@ -251,7 +252,7 @@ npm test
 | `tests/db/` | Los criterios de aceptación de RF-23, RF-02, RF-03, RF-01, RF-06, RF-04, RF-05 y RNF-04, e intentos de **violar** cada regla con SQL directo | Siempre. Aplica las migraciones reales sobre un PostgreSQL en memoria (PGlite); no necesita Docker ni conexión |
 | `tests/unidad/` | Lectura y formato de cantidades y dinero sin flotantes | Siempre |
 | `tests/db/cuentas.test.ts` | Solicitudes de acceso, aprobación, rechazo, roles y puesta en marcha, incluidos los intentos de saltear la aprobación | Siempre |
-| `tests/db/pestanas.test.ts` | Fraccionamiento con varias presentaciones, conteo físico y ajuste, servicios con receta (todo o nada), punto de pedido, alta y eliminación de insumos con las cinco presentaciones, inmutabilidad y aislamiento, y el catálogo inicial de GFK | Siempre |
+| `tests/db/pestanas.test.ts` | Fraccionamiento con varias presentaciones, conteo físico y ajuste, servicios con receta (todo o nada), alerta de reposición por debajo de 100 L y punto de pedido, alta y eliminación de insumos con las cinco presentaciones, inmutabilidad y aislamiento, y el catálogo inicial de GFK | Siempre |
 | `tests/unidad/registro.test.ts` | Armado del libro de auditoría unificado | Siempre |
 | `tests/api/` | El caso del bidón de punta a punta contra Supabase Auth y la API con los dos usuarios; registro, correo duplicado, aprobación, recuperación y cambio de contraseña | Solo si están definidas `PRUEBAS_SUPABASE_URL`, `PRUEBAS_SUPABASE_ANON_KEY` y `PRUEBAS_SUPABASE_SERVICE_ROLE_KEY`. **Nunca apuntarlas a producción** |
 

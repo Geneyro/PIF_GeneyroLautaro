@@ -9,8 +9,23 @@ function ancho(cantidad: number, escala: number): string {
   return `${Math.max(1, Math.round((cantidad * 1000) / escala) / 10)}%`;
 }
 
+/**
+ * Mínimo a granel: 100 L (100.000 mL). La vista `v_saldo_insumo` aplica la
+ * misma regla en la columna `reponer`; acá solo se usa para mostrarla.
+ */
+const MINIMO_GRANEL = 100_000;
+
+/** Cantidad por debajo de la cual se pide reponer: 100 L o el punto de pedido, si es mayor. */
+function minimo(i: SaldoInsumo): number {
+  return Math.max(MINIMO_GRANEL, i.punto_pedido ?? 0);
+}
+
+/** «A, B y C». */
+function enumerar(nombres: string[]): string {
+  return nombres.length <= 1 ? (nombres[0] ?? '') : `${nombres.slice(0, -1).join(', ')} y ${nombres[nombres.length - 1]}`;
+}
+
 function Estado({ i }: { i: SaldoInsumo }) {
-  if (i.punto_pedido === null) return <span className="estado estado-neutro">Sin punto de pedido</span>;
   return i.reponer ? (
     <span className="estado estado-aviso">
       <AlertTriangle size={14} aria-hidden="true" /> Reponer
@@ -27,8 +42,7 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
   const alertas = insumos.filter((i) => i.reponer);
   const enMl = insumos.filter((i) => i.unidad_base === 'mL');
   const totalMl = enMl.reduce((s, i) => s + i.saldo_granel, 0);
-  const escala = Math.max(1, ...insumos.map((i) => Math.max(i.saldo_granel, i.punto_pedido ?? 0)));
-  const sinPunto = insumos.filter((i) => i.punto_pedido === null).length;
+  const escala = Math.max(1, ...insumos.map((i) => Math.max(i.saldo_granel, minimo(i))));
 
   return (
     <>
@@ -52,7 +66,11 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
           </span>
           <span className="metrica-titulo">Alertas de reposición</span>
           <strong className="metrica-valor">{alertas.length}</strong>
-          <span className="suave">{alertas.length ? 'Insumos en el punto de pedido' : 'Stock en niveles normales'}</span>
+          <span className="suave">
+            {alertas.length === 0
+              ? 'Ningún insumo para reponer'
+              : `${alertas.length === 1 ? 'Insumo' : 'Insumos'} para reponer: ${enumerar(alertas.map((i) => i.nombre))}`}
+          </span>
         </div>
         <div className="metrica">
           <span className="metrica-icono">
@@ -66,7 +84,9 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
 
       {alertas.length > 0 ? (
         <section aria-labelledby="titulo-alertas">
-          <h2 id="titulo-alertas">Reposición</h2>
+          <h2 id="titulo-alertas">
+            Reposición · {alertas.length} {alertas.length === 1 ? 'insumo' : 'insumos'}
+          </h2>
           <div className="alertas">
             {alertas.map((i) => (
               <article key={i.insumo_id} className="alerta">
@@ -74,8 +94,8 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
                 <div>
                   <strong>Reponer {i.nombre}</strong>
                   <p>
-                    Quedan {baseAMayor(i.saldo_granel)} {unidadMayor(i.unidad_base)} a granel · punto de pedido{' '}
-                    {baseAMayor(i.punto_pedido ?? 0)} {unidadMayor(i.unidad_base)}
+                    Quedan {baseAMayor(i.saldo_granel)} {unidadMayor(i.unidad_base)} a granel · mínimo{' '}
+                    {baseAMayor(minimo(i))} {unidadMayor(i.unidad_base)}
                   </p>
                 </div>
                 <Link href="/insumos" className="boton boton-chico">
@@ -99,15 +119,13 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
             <div className="tarjeta-cabecera">
               <h2 id="titulo-resumen">Saldo a granel por insumo</h2>
               <span className="suave leyenda">
-                <span className="leyenda-marca" aria-hidden="true" /> Punto de pedido
+                <span className="leyenda-marca" aria-hidden="true" /> Mínimo de reposición
               </span>
             </div>
             <ul className="barras">
               {insumos.map((i) => {
                 const u = unidadMayor(i.unidad_base);
-                const resumen =
-                  `${i.nombre}: ${formatBase(i.saldo_granel, i.unidad_base)}` +
-                  (i.punto_pedido !== null ? ` · punto de pedido ${formatBase(i.punto_pedido, i.unidad_base)}` : '');
+                const resumen = `${i.nombre}: ${formatBase(i.saldo_granel, i.unidad_base)} · mínimo ${formatBase(minimo(i), i.unidad_base)}`;
                 return (
                   <li key={i.insumo_id} className={i.reponer ? 'barra-fila barra-reponer' : 'barra-fila'} title={resumen}>
                     <span className="barra-nombre">
@@ -116,9 +134,7 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
                     </span>
                     <span className="barra-pista" aria-hidden="true">
                       <span className="barra-valor" style={{ width: ancho(i.saldo_granel, escala) }} />
-                      {i.punto_pedido !== null ? (
-                        <span className="barra-punto" style={{ left: ancho(i.punto_pedido, escala) }} />
-                      ) : null}
+                      <span className="barra-punto" style={{ left: ancho(minimo(i), escala) }} />
                     </span>
                     <span className="barra-cifra num">
                       {baseAMayor(i.saldo_granel)} {u}
@@ -127,12 +143,6 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
                 );
               })}
             </ul>
-            {sinPunto > 0 ? (
-              <p className="suave nota">
-                {sinPunto === 1 ? 'Un insumo no tiene' : `${sinPunto} insumos no tienen`} punto de pedido. Se define en{' '}
-                <Link href="/insumos">Insumos</Link>.
-              </p>
-            ) : null}
           </section>
 
           <section className="tarjeta tarjeta-tabla" aria-labelledby="titulo-saldos">
@@ -147,7 +157,7 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
                     <th className="num">A granel</th>
                     <th className="num">Equivalente</th>
                     <th className="num">Fraccionado</th>
-                    <th className="num">Punto de pedido</th>
+                    <th className="num">Mínimo</th>
                     <th>Estado</th>
                   </tr>
                 </thead>
@@ -162,7 +172,7 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
                         {baseAMayor(i.saldo_granel)} {unidadMayor(i.unidad_base)}
                       </td>
                       <td className="num">{formatBase(i.saldo_fraccionado, i.unidad_base)}</td>
-                      <td className="num">{i.punto_pedido === null ? '—' : formatBase(i.punto_pedido, i.unidad_base)}</td>
+                      <td className="num">{formatBase(minimo(i), i.unidad_base)}</td>
                       <td>
                         <Estado i={i} />
                       </td>
