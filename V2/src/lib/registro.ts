@@ -7,12 +7,12 @@ import type { Movimiento, TipoMovimiento, UnidadBase } from './tipos';
  * describe cada una en el idioma del taller.
  */
 
-export const ORIGENES = ['Motor de Fraccionamiento', 'Auditoría', 'Servicios', 'Ingresos', 'Corrección'] as const;
+export const ORIGENES = ['Motor de Fraccionamiento', 'Insumos', 'Servicios', 'Ingresos', 'Corrección'] as const;
 export type Origen = (typeof ORIGENES)[number];
 
 const ORIGEN_POR_TIPO: Record<TipoMovimiento, Origen> = {
   FRACCIONAMIENTO: 'Motor de Fraccionamiento',
-  AJUSTE: 'Auditoría',
+  AJUSTE: 'Insumos',
   CONSUMO: 'Servicios',
   INGRESO: 'Ingresos',
   COMPENSACION: 'Corrección',

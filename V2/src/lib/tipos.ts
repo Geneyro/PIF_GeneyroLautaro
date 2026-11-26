@@ -66,7 +66,7 @@ export interface Movimiento {
   tipo_origen: TipoMovimiento | null;
 }
 
-/** Fila de la vista v_conteo_fisico (Auditoría). */
+/** Fila de la vista v_conteo_fisico (conteos de la pestaña Insumos). */
 export interface ConteoFisico {
   id: number;
   insumo_id: string;

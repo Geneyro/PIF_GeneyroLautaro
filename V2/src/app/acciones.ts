@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { normalizarCorreo, registrarCuenta, validarClave, validarRegistro } from '@/lib/cuentas';
-import { formatBase, formatCantidad, leerEnteroNoNegativo, leerEnteroPositivo, pesosACentavos } from '@/lib/formato';
+import { formatBase, formatCantidad, leerEnteroNoNegativo, leerEnteroPositivo } from '@/lib/formato';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { entornoSupabase } from '@/lib/supabase/entorno';
 import { crearClienteServidor } from '@/lib/supabase/servidor';
@@ -13,8 +13,8 @@ import type { Estado, SaldoInsumo } from '@/lib/tipos';
 /*
  * Server Actions. Se ejecutan solo en el servidor, con la sesión del usuario,
  * y delegan TODA regla de negocio en las funciones PL/pgSQL: acá solo se leen
- * los campos del formulario. Si la base rechaza la operación, su mensaje se
- * devuelve tal cual a la pantalla.
+ * los campos del formulario. Si la base rechaza la operación, la pantalla
+ * muestra su mensaje sin detalles técnicos.
  */
 
 function texto(fd: FormData, campo: string): string | null {
@@ -29,10 +29,6 @@ function crudo(fd: FormData, campo: string): string | null {
 }
 
 type ErrorBase = { message: string; hint?: string | null };
-
-function rechazo(error: ErrorBase): Estado {
-  return { ok: false, mensaje: error.message, detalle: error.hint ?? undefined };
-}
 
 async function ejecutar(accion: () => Promise<Estado>): Promise<Estado> {
   try {
@@ -197,94 +193,6 @@ export async function restablecerClave(_previo: Estado, fd: FormData): Promise<E
   return resultado;
 }
 
-/** Un administrador aprueba (con el rol elegido) o rechaza una solicitud de acceso. */
-export async function resolverSolicitud(_previo: Estado, fd: FormData): Promise<Estado> {
-  return ejecutar(async () => {
-    const usuarioId = texto(fd, 'usuario_id');
-    const decision = texto(fd, 'decision');
-    const supabase = crearClienteServidor();
-
-    if (decision === 'rechazar') {
-      const { error } = await supabase.rpc('rechazar_solicitud', { p_usuario_id: usuarioId });
-      if (error) return rechazo(error);
-      revalidatePath('/usuarios');
-      return { ok: true, mensaje: 'Solicitud rechazada. La cuenta no tiene acceso.' };
-    }
-
-    const { error } = await supabase.rpc('aprobar_solicitud', { p_usuario_id: usuarioId, p_rol: texto(fd, 'rol') });
-    if (error) return rechazo(error);
-    revalidatePath('/usuarios');
-    return { ok: true, mensaje: 'Cuenta aprobada. Ya puede operar.' };
-  });
-}
-
-// =============================================================================
-// RF-02 · Alta de insumo con presentaciones
-// =============================================================================
-
-export async function crearInsumo(_previo: Estado, fd: FormData): Promise<Estado> {
-  return ejecutar(async () => {
-    const nombre = texto(fd, 'nombre');
-    const unidadBase = texto(fd, 'unidad_base');
-    const presentaciones = fd.getAll('presentaciones').map((v) => Number(v));
-    const { error } = await crearClienteServidor().rpc('crear_insumo', {
-      p_nombre: nombre,
-      p_unidad_base: unidadBase,
-      p_presentaciones: presentaciones,
-    });
-    if (error) return rechazo(error);
-    revalidatePath('/', 'layout');
-    return { ok: true, mensaje: `Insumo «${nombre}» dado de alta en ${unidadBase}.` };
-  });
-}
-
-export async function agregarPresentacion(_previo: Estado, fd: FormData): Promise<Estado> {
-  return ejecutar(async () => {
-    const { error } = await crearClienteServidor().rpc('agregar_presentacion', {
-      p_insumo_id: texto(fd, 'insumo_id'),
-      p_tamano: leerEnteroPositivo(texto(fd, 'tamano')),
-    });
-    if (error) return rechazo(error);
-    revalidatePath('/', 'layout');
-    return { ok: true, mensaje: 'Presentación agregada.' };
-  });
-}
-
-// =============================================================================
-// RF-03 · Ingreso
-// =============================================================================
-
-export async function registrarIngreso(_previo: Estado, fd: FormData): Promise<Estado> {
-  return ejecutar(async () => {
-    const insumoId = texto(fd, 'insumo_id');
-    const cantidad = leerEnteroPositivo(texto(fd, 'cantidad'));
-    if (cantidad === null) {
-      return { ok: false, mensaje: 'La cantidad debe ser un número entero mayor que 0 (sin decimales).' };
-    }
-    const costoTexto = texto(fd, 'costo');
-    const costo = pesosACentavos(costoTexto);
-    if (costoTexto !== null && costo === null) {
-      return { ok: false, mensaje: 'El costo no es un importe válido. Ejemplos: 2400000 · 2.400.000 · 2400,50' };
-    }
-    const { error } = await crearClienteServidor().rpc('registrar_ingreso', {
-      p_insumo_id: insumoId,
-      p_cantidad: cantidad,
-      p_unidad: texto(fd, 'unidad'),
-      p_proveedor: texto(fd, 'proveedor'),
-      p_costo_centavos: costo,
-      p_observacion: texto(fd, 'observacion'),
-    });
-    if (error) return rechazo(error);
-    revalidatePath('/', 'layout');
-    const saldo = insumoId ? await saldoDe(insumoId) : null;
-    return {
-      ok: true,
-      mensaje: 'Ingreso registrado.',
-      detalle: saldo ? `Saldo de ${saldo.nombre}: ${formatCantidad(saldo.saldo_total, saldo.unidad_base)}.` : undefined,
-    };
-  });
-}
-
 /** Lista de enteros positivos de un campo repetido; null si alguno no lo es. */
 function enteros(fd: FormData, campo: string): number[] | null {
   const valores = fd.getAll(campo).map((v) => (typeof v === 'string' ? leerEnteroPositivo(v) : null));
@@ -340,7 +248,7 @@ export async function fraccionar(_previo: Estado, fd: FormData): Promise<Estado>
 }
 
 // =============================================================================
-// Auditoría
+// Insumos · conteo físico
 // =============================================================================
 
 export async function registrarConteo(_previo: Estado, fd: FormData): Promise<Estado> {
@@ -403,7 +311,23 @@ export async function registrarServicio(_previo: Estado, fd: FormData): Promise<
 }
 
 // =============================================================================
-// Catálogo · punto de pedido y baja lógica
+// Insumos · alta y baja
+// =============================================================================
+
+export async function agregarInsumo(_previo: Estado, fd: FormData): Promise<Estado> {
+  return ejecutar(async () => {
+    const nombre = texto(fd, 'nombre');
+    const unidad = texto(fd, 'unidad_base') ?? 'mL';
+    if (!nombre) return { ok: false, mensaje: 'Ingresá el nombre del insumo.' };
+    const { error } = await crearClienteServidor().rpc('agregar_insumo', { p_nombre: nombre, p_unidad_base: unidad });
+    if (error) return mensajeAmigable(error);
+    revalidatePath('/', 'layout');
+    return { ok: true, mensaje: `Insumo «${nombre}» agregado con presentaciones de 1, 5, 20, 60 y 120 L.` };
+  });
+}
+
+// =============================================================================
+// Insumos · punto de pedido y eliminación
 // =============================================================================
 
 export async function definirPuntoPedido(_previo: Estado, fd: FormData): Promise<Estado> {
@@ -432,7 +356,7 @@ export async function cambiarEstadoInsumo(_previo: Estado, fd: FormData): Promis
     });
     if (error) return mensajeAmigable(error);
     revalidatePath('/', 'layout');
-    return { ok: true, mensaje: activo ? 'Insumo reactivado.' : 'Insumo dado de baja.' };
+    return { ok: true, mensaje: activo ? 'Insumo reactivado.' : 'Insumo eliminado. Su historial se conserva.' };
   });
 }
 

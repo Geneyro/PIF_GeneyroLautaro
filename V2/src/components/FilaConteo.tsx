@@ -7,7 +7,7 @@ import { formatBase, leerEnteroNoNegativo } from '@/lib/formato';
 import type { SaldoInsumo } from '@/lib/tipos';
 import { Enviar } from './ui';
 
-/** Auditoría · una fila por insumo: saldo del sistema, conteo y diferencia. */
+/** Insumos · conteo físico: una fila por insumo: saldo del sistema, conteo y diferencia. */
 export function FilaConteo({ insumo }: { insumo: SaldoInsumo }) {
   const [estado, accion] = useFormState(registrarConteo, null);
   const [conteo, setConteo] = useState('');

@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { AlertTriangle, CheckCircle2, Droplets, Layers, PackagePlus } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ClipboardCheck, Droplets, Layers } from 'lucide-react';
 import { baseAMayor, formatBase, unidadMayor } from '@/lib/formato';
 import type { SaldoInsumo } from '@/lib/tipos';
 
@@ -60,7 +60,7 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
           </span>
           <span className="metrica-titulo">Insumos activos</span>
           <strong className="metrica-valor">{insumos.length}</strong>
-          <span className="suave">Insumos a granel en el catálogo</span>
+          <span className="suave">Insumos a granel registrados</span>
         </div>
       </div>
 
@@ -78,8 +78,8 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
                     {baseAMayor(i.punto_pedido ?? 0)} {unidadMayor(i.unidad_base)}
                   </p>
                 </div>
-                <Link href="/ingresos" className="boton boton-chico">
-                  <PackagePlus size={16} aria-hidden="true" /> Registrar ingreso
+                <Link href="/insumos" className="boton boton-chico">
+                  <ClipboardCheck size={16} aria-hidden="true" /> Ir a Insumos
                 </Link>
               </article>
             ))}
@@ -90,7 +90,7 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
       {insumos.length === 0 ? (
         <section className="tarjeta">
           <p className="vacio">
-            Todavía no hay insumos. Dalos de alta en <Link href="/catalogo">Catálogo</Link>.
+            Todavía no hay insumos. Agregalos en <Link href="/insumos">Insumos</Link>.
           </p>
         </section>
       ) : (
@@ -130,7 +130,7 @@ export function PanelDashboard({ insumos }: { insumos: SaldoInsumo[] }) {
             {sinPunto > 0 ? (
               <p className="suave nota">
                 {sinPunto === 1 ? 'Un insumo no tiene' : `${sinPunto} insumos no tienen`} punto de pedido. Se define en{' '}
-                <Link href="/catalogo">Catálogo</Link>.
+                <Link href="/insumos">Insumos</Link>.
               </p>
             ) : null}
           </section>

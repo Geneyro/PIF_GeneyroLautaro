@@ -118,7 +118,7 @@ jobs:
           fallar() { echo "$1" >&2; cat "$RUNNER_TEMP/app.log" >&2; exit 1; }
 
           # Sin sesión, toda pantalla de negocio redirige al inicio de sesión.
-          for ruta in / /fraccionar /auditoria /servicios /movimientos /catalogo /ingresos /usuarios /restablecer; do
+          for ruta in / /fraccionar /insumos /servicios /movimientos /restablecer; do
             resultado="$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "http://localhost:3100$ruta")"
             echo "$ruta -> $resultado"
             [ "$resultado" = "307 http://localhost:3100/login" ] || fallar "La ruta $ruta no redirige al inicio de sesión."

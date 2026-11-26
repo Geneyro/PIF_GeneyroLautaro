@@ -46,7 +46,7 @@ export function FormFraccionar({
     return (
       <section className="tarjeta">
         <p className="vacio">
-          Ningún insumo tiene presentaciones. Agregalas en <Link href="/catalogo">Catálogo</Link>.
+          Todavía no hay insumos. Agregalos en <Link href="/insumos">Insumos</Link>.
         </p>
       </section>
     );

@@ -271,3 +271,49 @@ describe('Catálogo inicial de GFK', () => {
     }
   });
 });
+
+// -----------------------------------------------------------------------------
+describe('Insumos · agregar y eliminar', () => {
+  const agregar = (usuario: string, nombre: string, unidad = 'mL') =>
+    b.como(usuario, (q) => q('select public.agregar_insumo($1, $2) as id', [nombre, unidad])).then((f) => f[0].id as string);
+  const capacidades = async (insumo: string) =>
+    (await b.admin('select capacidad_base from public.presentacion where insumo_id = $1 and activo order by 1', [insumo])).map((f) =>
+      Number(f.capacidad_base),
+    );
+
+  it('un insumo nuevo tiene las cinco presentaciones, de 1 a 120 L', async () => {
+    const id = await agregar(GUIDO, '  Insumo nuevo ');
+    expect(await capacidades(id)).toEqual([1000, 5000, 20000, 60000, 120000]);
+    const [i] = await b.admin('select nombre, unidad_base, creado_por from public.insumo where id = $1', [id]);
+    expect(i).toEqual({ nombre: 'Insumo nuevo', unidad_base: 'mL', creado_por: GUIDO });
+  });
+
+  it('los insumos existentes recibieron las presentaciones que les faltaban', async () => {
+    const id = await b.crearInsumo(YANINA, 'Insumo viejo', 'mL', [5]);
+    const migracion = readFileSync(path.join(__dirname, '..', '..', 'supabase', 'migrations', '20261126000001_insumos.sql'), 'utf8');
+    const relleno = migracion.match(/select interno\.completar_presentaciones\(i\.id\) from public\.insumo i;/)?.[0];
+    expect(relleno).toBeTruthy();
+    await b.admin(relleno as string);
+    expect(await capacidades(id)).toEqual([1000, 5000, 20000, 60000, 120000]);
+  });
+
+  it('eliminar es una baja lógica; volver a agregarlo lo reactiva con su saldo e historial', async () => {
+    const id = await agregar(YANINA, 'Insumo a eliminar');
+    await b.ingresar(YANINA, id, 5, 'L');
+    await b.como(YANINA, (q) => q('select public.cambiar_estado_insumo($1, false)', [id]));
+    const visibles = await b.como(GUIDO, (q) => q('select 1 from public.v_saldo_insumo where insumo_id = $1 and activo', [id]));
+    expect(visibles).toHaveLength(0);
+
+    expect(await agregar(GUIDO, 'INSUMO A ELIMINAR')).toBe(id);
+    expect((await b.saldo(YANINA, id)).granel).toBe(5000);
+  });
+
+  it('rechaza nombres vacíos, repetidos, unidades inválidas y usuarios sin sesión', async () => {
+    await agregar(YANINA, 'Insumo repetido');
+    expect(await rechazo(agregar(GUIDO, 'insumo REPETIDO'))).toMatch(/Ya existe un insumo llamado "insumo REPETIDO"/);
+    expect(await rechazo(agregar(YANINA, '   '))).toMatch(/nombre del insumo/);
+    expect(await rechazo(agregar(YANINA, 'x'.repeat(81)))).toMatch(/hasta 80/);
+    expect(await rechazo(agregar(YANINA, 'Unidad rara', 'L'))).toMatch(/mL o g/);
+    expect(await rechazo(b.como(null, (q) => q("select public.agregar_insumo('X')")))).toMatch(/permission denied/i);
+  });
+});

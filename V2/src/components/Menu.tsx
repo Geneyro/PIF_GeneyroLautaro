@@ -2,18 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Boxes,
-  ClipboardCheck,
-  History,
-  LayoutDashboard,
-  LogOut,
-  PackagePlus,
-  Tags,
-  Users,
-  Wrench,
-  type LucideIcon,
-} from 'lucide-react';
+import { Boxes, History, LayoutDashboard, LogOut, Package, Wrench, type LucideIcon } from 'lucide-react';
 import { cerrarSesion } from '@/app/acciones';
 
 interface Seccion {
@@ -25,15 +14,9 @@ interface Seccion {
 export const PESTANAS: Seccion[] = [
   { href: '/', texto: 'Dashboard General', icono: LayoutDashboard },
   { href: '/fraccionar', texto: 'Motor de Fraccionamiento', icono: Boxes },
-  { href: '/auditoria', texto: 'Auditoría', icono: ClipboardCheck },
+  { href: '/insumos', texto: 'Insumos', icono: Package },
   { href: '/servicios', texto: 'Servicios', icono: Wrench },
   { href: '/movimientos', texto: 'Movimientos', icono: History },
-];
-
-const GESTION: Seccion[] = [
-  { href: '/ingresos', texto: 'Ingresos', icono: PackagePlus },
-  { href: '/catalogo', texto: 'Catálogo', icono: Tags },
-  { href: '/usuarios', texto: 'Usuarios', icono: Users },
 ];
 
 function iniciales(nombre: string): string {
@@ -87,10 +70,6 @@ export function Menu({ nombre, rol, alertas }: { nombre: string; rol: string; al
             insignia={s.href === '/' && alertas > 0 ? `${alertas} ${alertas === 1 ? 'alerta' : 'alertas'}` : undefined}
           />
         ))}
-        <span className="menu-grupo">Gestión</span>
-        {GESTION.map((s) => (
-          <Enlace key={s.href} s={s} actual={actual} />
-        ))}
       </nav>
 
       <form action={cerrarSesion} className="menu-pie">
@@ -106,7 +85,7 @@ export function Menu({ nombre, rol, alertas }: { nombre: string; rol: string; al
 /** Barra superior con la ubicación actual. */
 export function Encabezado() {
   const actual = usePathname();
-  const seccion = [...PESTANAS, ...GESTION].find((s) => s.href === actual);
+  const seccion = PESTANAS.find((s) => s.href === actual);
   return (
     <header className="barra">
       <span className="miga">DETAIL CONTROL</span>

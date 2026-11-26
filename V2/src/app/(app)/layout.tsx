@@ -23,7 +23,7 @@ export default async function MarcoAplicacion({ children }: { children: React.Re
       <MarcoAuth titulo="Cuenta pendiente de aprobación">
         <p>
           Tu cuenta{usuario.email ? ` (${usuario.email})` : ''} está creada, pero todavía no tiene acceso. Un
-          administrador debe aprobarla desde la sección Usuarios.
+          administrador debe aprobarla.
         </p>
         <p className="suave">Cuando la aprueben, vuelve a ingresar.</p>
         <form action={cerrarSesion}>

@@ -40,7 +40,7 @@ export function FormServicio({ insumos }: { insumos: SaldoInsumo[] }) {
     return (
       <section className="tarjeta">
         <p className="vacio">
-          Todavía no hay insumos. Dalos de alta en <Link href="/catalogo">Catálogo</Link>.
+          Todavía no hay insumos. Agregalos en <Link href="/insumos">Insumos</Link>.
         </p>
       </section>
     );

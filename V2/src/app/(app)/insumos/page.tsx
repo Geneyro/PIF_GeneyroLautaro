@@ -1,16 +1,17 @@
 import { FilaConteo } from '@/components/FilaConteo';
+import { FormAgregarInsumo, FormEliminarInsumo, FormPuntoPedido } from '@/components/FormAjustesInsumo';
 import { cargarConteos, cargarSaldos } from '@/lib/datos';
-import { formatBase, formatFechaHora } from '@/lib/formato';
+import { formatBase, formatFechaHora, formatPresentacion } from '@/lib/formato';
 
-/** Auditoría · conteo físico presencial y ajuste del stock. */
-export default async function Auditoria() {
-  const [{ insumos }, conteos] = await Promise.all([cargarSaldos(), cargarConteos()]);
+/** Insumos · conteo físico, ajuste del stock, alta y eliminación de insumos. */
+export default async function Insumos() {
+  const [{ insumos, presentaciones }, conteos] = await Promise.all([cargarSaldos(), cargarConteos()]);
 
   return (
     <>
       <div className="titulo">
-        <h1>Auditoría</h1>
-        <p className="suave">Cargá el conteo físico de cada insumo a granel y ajustá el stock si hay diferencias.</p>
+        <h1>Insumos</h1>
+        <p className="suave">Conteo físico de cada insumo a granel, ajuste del stock y alta o eliminación de insumos.</p>
       </div>
 
       <section className="tarjeta tarjeta-tabla" aria-labelledby="titulo-conteo">
@@ -18,7 +19,7 @@ export default async function Auditoria() {
           <h2 id="titulo-conteo">Conteo físico</h2>
         </div>
         {insumos.length === 0 ? (
-          <p className="vacio">Todavía no hay insumos.</p>
+          <p className="vacio">Todavía no hay insumos. Agregalos más abajo.</p>
         ) : (
           <div className="tabla-contenedor">
             <table className="tabla-conteo">
@@ -39,6 +40,52 @@ export default async function Auditoria() {
             </table>
           </div>
         )}
+      </section>
+
+      <section className="tarjeta tarjeta-tabla" aria-labelledby="titulo-administrar">
+        <div className="tarjeta-cabecera">
+          <h2 id="titulo-administrar">Agregar o eliminar insumos</h2>
+        </div>
+        <div className="tarjeta-cuerpo">
+          <FormAgregarInsumo />
+        </div>
+        {insumos.length > 0 ? (
+          <div className="tabla-contenedor">
+            <table>
+              <thead>
+                <tr>
+                  <th>Insumo</th>
+                  <th>Presentaciones</th>
+                  <th>Punto de pedido</th>
+                  <th>
+                    <span className="oculto">Eliminar</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {insumos.map((i) => (
+                  <tr key={i.insumo_id}>
+                    <td>
+                      <strong>{i.nombre}</strong> <span className="etiqueta">{i.unidad_base}</span>
+                    </td>
+                    <td className="suave">
+                      {presentaciones
+                        .filter((p) => p.insumo_id === i.insumo_id)
+                        .map((p) => formatPresentacion(p.capacidad_base, i.unidad_base))
+                        .join(' · ') || '—'}
+                    </td>
+                    <td>
+                      <FormPuntoPedido insumoId={i.insumo_id} nombre={i.nombre} unidadBase={i.unidad_base} actual={i.punto_pedido} />
+                    </td>
+                    <td className="num">
+                      <FormEliminarInsumo insumoId={i.insumo_id} nombre={i.nombre} />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : null}
       </section>
 
       <section className="tarjeta tarjeta-tabla" aria-labelledby="titulo-ultimos">

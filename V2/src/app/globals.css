@@ -393,6 +393,11 @@ a {
   background: var(--superficie-suave);
 }
 
+.tarjeta-cuerpo {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--borde);
+}
+
 .tarjeta-tabla .vacio {
   margin: 1.1rem 1.25rem;
 }
@@ -837,6 +842,10 @@ tbody tr:hover {
 
 .campo-corto {
   flex: 0 0 8rem;
+}
+
+.campo-unidad {
+  flex: 0 0 11rem;
 }
 
 .campo > span,

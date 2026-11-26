@@ -1,6 +1,6 @@
 import 'server-only';
 import { crearClienteServidor } from './supabase/servidor';
-import type { ConteoFisico, Miembro, Movimiento, SaldoInsumo, SaldoPresentacion, SolicitudAcceso } from './tipos';
+import type { ConteoFisico, Miembro, Movimiento, SaldoInsumo, SaldoPresentacion } from './tipos';
 
 /*
  * Lecturas. Todas pasan por la sesión del usuario: las políticas de la base
@@ -23,13 +23,6 @@ export async function cargarSaldos(): Promise<{ insumos: SaldoInsumo[]; presenta
     insumos: (insumos.data ?? []) as SaldoInsumo[],
     presentaciones: (presentaciones.data ?? []) as SaldoPresentacion[],
   };
-}
-
-export async function cargarProveedores(): Promise<string[]> {
-  const supabase = crearClienteServidor();
-  const { data, error } = await supabase.from('proveedor').select('nombre').eq('activo', true).order('nombre');
-  fallar(error);
-  return (data ?? []).map((p) => p.nombre as string);
 }
 
 export async function cargarMovimientos(limite = 300): Promise<Movimiento[]> {
@@ -55,22 +48,7 @@ export async function miembroActual(usuarioId: string): Promise<Miembro | null> 
   return (data as Miembro | null) ?? null;
 }
 
-export async function cargarMiembros(): Promise<Miembro[]> {
-  const supabase = crearClienteServidor();
-  const { data, error } = await supabase.from('miembro').select('usuario_id, nombre, rol, creado_en').order('creado_en');
-  fallar(error);
-  return (data ?? []) as Miembro[];
-}
-
-/** Solicitudes de acceso. La base solo se las devuelve a un administrador. */
-export async function cargarSolicitudes(): Promise<SolicitudAcceso[]> {
-  const supabase = crearClienteServidor();
-  const { data, error } = await supabase.from('solicitud_acceso').select('*').order('creado_en');
-  fallar(error);
-  return (data ?? []) as SolicitudAcceso[];
-}
-
-/** Últimos conteos físicos (Auditoría). */
+/** Últimos conteos físicos (pestaña Insumos). */
 export async function cargarConteos(limite = 20): Promise<ConteoFisico[]> {
   const supabase = crearClienteServidor();
   const { data, error } = await supabase
@@ -105,10 +83,3 @@ export async function cargarConsumos(limite = 120): Promise<Movimiento[]> {
   return (data ?? []) as Movimiento[];
 }
 
-/** Insumos dados de baja (Catálogo, para reactivarlos). */
-export async function cargarInsumosDeBaja(): Promise<SaldoInsumo[]> {
-  const supabase = crearClienteServidor();
-  const { data, error } = await supabase.from('v_saldo_insumo').select('*').eq('activo', false).order('nombre');
-  fallar(error);
-  return (data ?? []) as SaldoInsumo[];
-}

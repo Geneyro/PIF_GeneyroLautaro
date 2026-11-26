@@ -48,7 +48,7 @@ describe('libro de auditoría unificado', () => {
       ['Servicios', 'Mekasil Ultra', -150, 'Lavado · SUV', true],
       ['Servicios', 'Citrolimp', -80, 'Lavado · SUV', false], // se anula una vez, desde la primera fila
       ['Motor de Fraccionamiento', 'Citrolimp', -5000, '5 × 1 L', true],
-      ['Auditoría', 'Citrolimp', -500, 'Sistema 10.000 mL · contado 9.500 mL', true],
+      ['Insumos', 'Citrolimp', -500, 'Sistema 10.000 mL · contado 9.500 mL', true],
     ]);
   });
 
