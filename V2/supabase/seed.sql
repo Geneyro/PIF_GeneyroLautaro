@@ -52,12 +52,14 @@ $$;
 
 -- Insumos de GFK conocidos hasta ahora, con presentaciones de 1, 5 y 20 L.
 -- Se crean con la función del sistema, bajo la sesión de un usuario de prueba.
--- (Faltan dos insumos y los precios: se agregan cuando el cliente los informe.)
+-- (Faltan los precios: se agregan cuando el cliente los informe.)
 do $$
 begin
   perform set_config('request.jwt.claims', '{"sub":"11111111-1111-4111-8111-111111111111","role":"authenticated"}', true);
   perform public.crear_insumo('Mekasil Tradicional', 'mL', '{1,5,20}');
-  perform public.crear_insumo('BB', 'mL', '{1,5,20}');
+  perform public.crear_insumo('Mekasil Ultra', 'mL', '{1,5,20}');
+  perform public.crear_insumo('BB Tradicional', 'mL', '{1,5,20}');
+  perform public.crear_insumo('BB Ultra', 'mL', '{1,5,20}');
   perform public.crear_insumo('Citrolimp', 'mL', '{1,5,20}');
   perform public.crear_insumo('Shampoo Siliconado', 'mL', '{1,5,20}');
 end;

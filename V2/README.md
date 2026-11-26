@@ -36,6 +36,11 @@ del prototipo.
 | **RF-06** Merma | La merma de un fraccionamiento exige motivo | `registrar_fraccionamiento()`, restricción `movimiento_forma_valida` |
 | **RF-04** Saldo | Saldo en unidad base y equivalente por presentación; siempre es la suma de los movimientos | vistas `v_saldo_insumo`, `v_saldo_presentacion` |
 | **RF-05** Inmutabilidad | Los movimientos no se editan ni se borran; se corrigen con una compensación que referencia al original | triggers `trg_movimiento_bloquear_*`, `compensar_operacion()` |
+| Dashboard General | Saldos a granel en mL, resumen visual por insumo y alertas de reposición según el punto de pedido | vista `v_saldo_insumo` (columnas `punto_pedido`, `reponer`), `definir_punto_pedido()` |
+| Motor de Fraccionamiento | Del granel a una o varias presentaciones, sin merma; el stock restante se ve mientras se carga | `fraccionar()` |
+| Auditoría | Conteo físico por insumo contra el saldo del sistema; la diferencia se ajusta con un movimiento `AJUSTE` atribuido | `registrar_conteo()`, tabla `conteo_fisico` |
+| Servicios | Nombre del servicio, tipo de vehículo y receta (insumo + mL); cada insumo se descuenta con un movimiento `CONSUMO` | `registrar_servicio()`, tabla `servicio` |
+| Movimientos | Libro de auditoría unificado de todas las operaciones, filtrable por origen; una operación se anula con una compensación | vista `v_movimiento`, `src/lib/registro.ts` |
 | **RNF-02** HTTPS | Cabecera HSTS y cabeceras de seguridad | `next.config.mjs` |
 | **RNF-04** Organizaciones | Toda tabla lleva `organizacion_id`; un usuario solo ve su organización | políticas de seguridad por fila |
 
@@ -46,8 +51,12 @@ Reglas que atraviesan todo el sistema:
 - El saldo **no se guarda**: se calcula sumando movimientos.
 - Las reglas viven **en la base de datos**. La interfaz y la API no pueden saltearlas.
 
-Pendiente para próximas iteraciones: venta (RF-08), importación desde Excel (RF-21), conteo físico y
-desvío (RF-09), y el resto de la especificación.
+Pendiente para próximas iteraciones: venta (RF-08), importación desde Excel (RF-21) y el resto de la
+especificación.
+
+La interfaz se organiza en cinco pestañas (Dashboard General, Motor de Fraccionamiento, Auditoría,
+Servicios y Movimientos) y una sección *Gestión* con Ingresos, Catálogo y Usuarios. Toda operación
+revalida las pantallas: el descuento se ve enseguida en el Dashboard y la operación en Movimientos.
 
 ## 2. Arquitectura
 
@@ -150,6 +159,8 @@ Mientras Google no esté habilitado, el botón muestra un aviso en lugar de fall
 | `20261115000002_reglas.sql` | Funciones PL/pgSQL, triggers y vistas |
 | `20261115000003_seguridad.sql` | Seguridad por fila y permisos |
 | `20261116000001_cuentas_y_roles.sql` | Roles, solicitudes de acceso, aprobación y puesta en marcha |
+| `20261125000001_tipos_taller.sql` | Tipos de movimiento `AJUSTE` y `CONSUMO` (archivo propio: un valor nuevo de enum no se usa en la misma transacción) |
+| `20261125000002_pestanas.sql` | Punto de pedido, fraccionamiento sin merma, conteo físico, servicios, vistas, permisos y catálogo de GFK (Mekasil Tradicional y Ultra, BB Tradicional y Ultra, Citrolimp, Shampoo Siliconado) para las organizaciones existentes |
 
 Aplicarlas al proyecto remoto (pide la contraseña de la base):
 
@@ -232,13 +243,13 @@ npm run dev     # http://localhost:3100
 | # | Pantalla | Acción | Resultado |
 |---|----------|--------|-----------|
 | 0 | Registro (solo la primera vez) | Yanina crea su cuenta en «Regístrate»; Guido crea la suya y Yanina la aprueba en *Usuarios* | Los dos socios tienen acceso |
-| 1 | Inicio de sesión | Ingresar con el correo y la contraseña de Yanina | Entra a *Saldos* |
-| 2 | Catálogo | Nuevo insumo, *Líquido (mL)*, presentación *1 L* | El insumo queda con una presentación de 1.000 mL |
-| 3 | Ingresos | Cantidad `5`, unidad `L`, proveedor y costo | «Se registran 5.000 mL». Saldo 5.000 mL |
-| 4 | Fraccionar | Cantidad `5` L, presentación *1 L*, unidades `4` | **Rechazado**: «hay 1000 mL no explicados» |
-| 5 | Fraccionar | Cambiar unidades a `5` | **Confirmado**. A granel 0 mL, fraccionado 5.000 mL |
-| 6 | Cerrar sesión e ingresar como Guido → Movimientos | Ver el historial | Cada movimiento muestra quién lo registró |
-| 7 | Movimientos | *Corregir* una operación, con motivo | Se agrega una compensación; el original queda intacto |
+| 1 | Inicio de sesión | Ingresar con el correo y la contraseña de Yanina | Entra al *Dashboard General* |
+| 2 | Catálogo | Punto de pedido de Citrolimp: `4000` mL | Aparece la alerta «Reponer Citrolimp» (saldo 0) |
+| 3 | Ingresos | Citrolimp, `5` L, proveedor y costo | Dashboard: 5.000 mL a granel, estado *Normal* |
+| 4 | Motor de Fraccionamiento | Citrolimp, *1 L* × `2` | Mientras se carga: «Se descuenta −2.000 mL · Quedará 3.000 mL». Al confirmar, el Dashboard muestra 3.000 mL y la alerta *Reponer Citrolimp* |
+| 5 | Servicios | «Lavado premium», «SUV», Citrolimp `100` mL | El Dashboard baja a 2.900 mL; Movimientos muestra el consumo con el servicio y el usuario |
+| 6 | Auditoría | Conteo físico de Citrolimp: `2850` | «Stock ajustado −50 mL»; el ajuste queda atribuido en Movimientos |
+| 7 | Movimientos | *Anular* una operación, con motivo | Se agrega una corrección; el original queda intacto y marcado como anulado |
 
 ## 7. Pruebas e integración continua
 
@@ -251,6 +262,8 @@ npm test
 | `tests/db/` | Los criterios de aceptación de RF-23, RF-02, RF-03, RF-01, RF-06, RF-04, RF-05 y RNF-04, e intentos de **violar** cada regla con SQL directo | Siempre. Aplica las migraciones reales sobre un PostgreSQL en memoria (PGlite); no necesita Docker ni conexión |
 | `tests/unidad/` | Lectura y formato de cantidades y dinero sin flotantes | Siempre |
 | `tests/db/cuentas.test.ts` | Solicitudes de acceso, aprobación, rechazo, roles y puesta en marcha, incluidos los intentos de saltear la aprobación | Siempre |
+| `tests/db/pestanas.test.ts` | Fraccionamiento con varias presentaciones, conteo físico y ajuste, servicios con receta (todo o nada), punto de pedido, baja lógica, inmutabilidad y aislamiento, y el catálogo inicial de GFK | Siempre |
+| `tests/unidad/registro.test.ts` | Armado del libro de auditoría unificado | Siempre |
 | `tests/api/` | El caso del bidón de punta a punta contra Supabase Auth y la API con los dos usuarios; registro, correo duplicado, aprobación, recuperación y cambio de contraseña | Solo si están definidas `PRUEBAS_SUPABASE_URL`, `PRUEBAS_SUPABASE_ANON_KEY` y `PRUEBAS_SUPABASE_SERVICE_ROLE_KEY`. **Nunca apuntarlas a producción** |
 
 `tests/db/soporte/supabase-simulado.sql` reproduce lo mínimo de la plataforma Supabase (roles de la

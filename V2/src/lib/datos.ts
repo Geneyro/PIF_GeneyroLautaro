@@ -1,6 +1,6 @@
 import 'server-only';
 import { crearClienteServidor } from './supabase/servidor';
-import type { Miembro, Movimiento, SaldoInsumo, SaldoPresentacion, SolicitudAcceso } from './tipos';
+import type { ConteoFisico, Miembro, Movimiento, SaldoInsumo, SaldoPresentacion, SolicitudAcceso } from './tipos';
 
 /*
  * Lecturas. Todas pasan por la sesión del usuario: las políticas de la base
@@ -32,7 +32,7 @@ export async function cargarProveedores(): Promise<string[]> {
   return (data ?? []).map((p) => p.nombre as string);
 }
 
-export async function cargarMovimientos(limite = 150): Promise<Movimiento[]> {
+export async function cargarMovimientos(limite = 300): Promise<Movimiento[]> {
   const supabase = crearClienteServidor();
   const { data, error } = await supabase
     .from('v_movimiento')
@@ -68,4 +68,47 @@ export async function cargarSolicitudes(): Promise<SolicitudAcceso[]> {
   const { data, error } = await supabase.from('solicitud_acceso').select('*').order('creado_en');
   fallar(error);
   return (data ?? []) as SolicitudAcceso[];
+}
+
+/** Últimos conteos físicos (Auditoría). */
+export async function cargarConteos(limite = 20): Promise<ConteoFisico[]> {
+  const supabase = crearClienteServidor();
+  const { data, error } = await supabase
+    .from('v_conteo_fisico')
+    .select('*')
+    .order('id', { ascending: false })
+    .limit(limite);
+  fallar(error);
+  return (data ?? []) as ConteoFisico[];
+}
+
+/** Cantidad de insumos activos en el punto de pedido (insignia del menú). */
+export async function contarAlertas(): Promise<number> {
+  const { count } = await crearClienteServidor()
+    .from('v_saldo_insumo')
+    .select('insumo_id', { count: 'exact', head: true })
+    .eq('activo', true)
+    .eq('reponer', true);
+  return count ?? 0;
+}
+
+/** Consumos de los últimos servicios (líneas CONSUMO, la más reciente primero). */
+export async function cargarConsumos(limite = 120): Promise<Movimiento[]> {
+  const supabase = crearClienteServidor();
+  const { data, error } = await supabase
+    .from('v_movimiento')
+    .select('*')
+    .eq('tipo', 'CONSUMO')
+    .order('id', { ascending: false })
+    .limit(limite);
+  fallar(error);
+  return (data ?? []) as Movimiento[];
+}
+
+/** Insumos dados de baja (Catálogo, para reactivarlos). */
+export async function cargarInsumosDeBaja(): Promise<SaldoInsumo[]> {
+  const supabase = crearClienteServidor();
+  const { data, error } = await supabase.from('v_saldo_insumo').select('*').eq('activo', false).order('nombre');
+  fallar(error);
+  return (data ?? []) as SaldoInsumo[];
 }

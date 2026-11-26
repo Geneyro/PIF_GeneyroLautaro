@@ -9,17 +9,29 @@ export function Aviso({ estado }: { estado: Estado }) {
   if (!estado || estado.mensaje === '') return null;
   return (
     <div className={estado.ok ? 'aviso aviso-ok' : 'aviso aviso-error'} role={estado.ok ? 'status' : 'alert'}>
-      <strong>{estado.ok ? 'Confirmado' : 'Rechazado'}</strong>
-      <p>{estado.mensaje}</p>
+      <p>
+        <strong>{estado.mensaje}</strong>
+      </p>
       {estado.detalle ? <p className="aviso-detalle">{estado.detalle}</p> : null}
     </div>
   );
 }
 
-export function Enviar({ children, secundario = false }: { children: React.ReactNode; secundario?: boolean }) {
+export function Enviar({
+  children,
+  secundario = false,
+  chico = false,
+  deshabilitado = false,
+}: {
+  children: React.ReactNode;
+  secundario?: boolean;
+  chico?: boolean;
+  deshabilitado?: boolean;
+}) {
   const { pending } = useFormStatus();
+  const clase = ['boton', secundario ? 'boton-secundario' : '', chico ? 'boton-chico' : ''].filter(Boolean).join(' ');
   return (
-    <button type="submit" className={secundario ? 'boton boton-secundario' : 'boton'} disabled={pending}>
+    <button type="submit" className={clase} disabled={pending || deshabilitado}>
       {pending ? 'Enviando…' : children}
     </button>
   );

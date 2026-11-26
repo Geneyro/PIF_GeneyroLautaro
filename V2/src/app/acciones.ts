@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { normalizarCorreo, registrarCuenta, validarClave, validarRegistro } from '@/lib/cuentas';
-import { formatCantidad, leerEnteroNoNegativo, leerEnteroPositivo, pesosACentavos } from '@/lib/formato';
+import { formatBase, formatCantidad, leerEnteroNoNegativo, leerEnteroPositivo, pesosACentavos } from '@/lib/formato';
 import { crearClienteAdmin } from '@/lib/supabase/admin';
 import { entornoSupabase } from '@/lib/supabase/entorno';
 import { crearClienteServidor } from '@/lib/supabase/servidor';
@@ -285,41 +285,154 @@ export async function registrarIngreso(_previo: Estado, fd: FormData): Promise<E
   });
 }
 
+/** Lista de enteros positivos de un campo repetido; null si alguno no lo es. */
+function enteros(fd: FormData, campo: string): number[] | null {
+  const valores = fd.getAll(campo).map((v) => (typeof v === 'string' ? leerEnteroPositivo(v) : null));
+  return valores.every((v): v is number => v !== null) ? valores : null;
+}
+
+function textos(fd: FormData, campo: string): string[] {
+  return fd.getAll(campo).map((v) => (typeof v === 'string' ? v.trim() : ''));
+}
+
+/**
+ * Las funciones de la base ya devuelven mensajes pensados para el usuario.
+ * Lo que no lo sea (una restricción, un fallo de red) se reemplaza por un
+ * mensaje general: la pantalla nunca muestra detalles técnicos.
+ */
+function mensajeAmigable(error: ErrorBase & { code?: string }): Estado {
+  const tecnico = /violates|constraint|operación [0-9a-f-]{36}|syntax|function|column|relation|permission|null value/i;
+  const propio = ['P0001', 'P0002', '22023', '23505'].includes(error.code ?? '') && !tecnico.test(error.message);
+  return {
+    ok: false,
+    mensaje: propio ? error.message : 'No se pudo registrar la operación. Revisá los datos e intentá de nuevo.',
+  };
+}
+
 // =============================================================================
-// RF-01 / RF-06 · Fraccionamiento
+// Motor de Fraccionamiento
 // =============================================================================
 
-export async function registrarFraccionamiento(_previo: Estado, fd: FormData): Promise<Estado> {
+export async function fraccionar(_previo: Estado, fd: FormData): Promise<Estado> {
   return ejecutar(async () => {
     const insumoId = texto(fd, 'insumo_id');
-    const cantidad = leerEnteroPositivo(texto(fd, 'cantidad_origen'));
-    const unidades = leerEnteroPositivo(texto(fd, 'unidades'));
-    const merma = leerEnteroNoNegativo(texto(fd, 'merma'));
-    if (cantidad === null || unidades === null || merma === null) {
-      return { ok: false, mensaje: 'Cantidad, unidades y merma deben ser números enteros (sin decimales).' };
+    const presentaciones = textos(fd, 'presentacion_id');
+    const unidades = enteros(fd, 'unidades');
+    if (!insumoId) return { ok: false, mensaje: 'Seleccioná el insumo a granel de origen.' };
+    if (!unidades || unidades.length === 0 || presentaciones.some((p) => p === '')) {
+      return { ok: false, mensaje: 'Cada presentación necesita una cantidad entera de unidades, mayor que 0.' };
     }
-    // La cantidad puede cargarse en L/kg: se pasa a unidad base con enteros.
-    const enMayor = ['L', 'kg'].includes(texto(fd, 'unidad_origen') ?? '');
-    const { error } = await crearClienteServidor().rpc('registrar_fraccionamiento', {
+    const { error } = await crearClienteServidor().rpc('fraccionar', {
       p_insumo_id: insumoId,
-      p_cantidad_origen: enMayor ? cantidad * 1000 : cantidad,
-      p_presentacion_id: texto(fd, 'presentacion_id'),
+      p_presentaciones: presentaciones,
       p_unidades: unidades,
-      p_merma: merma,
-      p_motivo_merma: texto(fd, 'motivo_merma'),
       p_observacion: texto(fd, 'observacion'),
     });
-    if (error) return rechazo(error);
+    if (error) return mensajeAmigable(error);
     revalidatePath('/', 'layout');
-    const saldo = insumoId ? await saldoDe(insumoId) : null;
+    const saldo = await saldoDe(insumoId);
     return {
       ok: true,
-      mensaje: 'Fraccionamiento confirmado: las cantidades se conservan.',
-      detalle: saldo
-        ? `${saldo.nombre}: a granel ${formatCantidad(saldo.saldo_granel, saldo.unidad_base)} · ` +
-          `fraccionado ${formatCantidad(saldo.saldo_fraccionado, saldo.unidad_base)}.`
-        : undefined,
+      mensaje: 'Fraccionamiento registrado.',
+      detalle: saldo ? `${saldo.nombre}: quedan ${formatCantidad(saldo.saldo_granel, saldo.unidad_base)} a granel.` : undefined,
     };
+  });
+}
+
+// =============================================================================
+// Auditoría
+// =============================================================================
+
+export async function registrarConteo(_previo: Estado, fd: FormData): Promise<Estado> {
+  return ejecutar(async () => {
+    const insumoId = texto(fd, 'insumo_id');
+    const escrito = texto(fd, 'conteo');
+    const conteo = escrito === null ? null : leerEnteroNoNegativo(escrito);
+    if (!insumoId || conteo === null) {
+      return { ok: false, mensaje: 'Ingresá el conteo físico como un número entero.' };
+    }
+    const { data, error } = await crearClienteServidor().rpc('registrar_conteo', {
+      p_insumo_id: insumoId,
+      p_conteo: conteo,
+      p_observacion: texto(fd, 'observacion'),
+    });
+    if (error) return mensajeAmigable(error);
+    revalidatePath('/', 'layout');
+    const saldo = await saldoDe(insumoId);
+    const diferencia = Number(data ?? 0);
+    const unidad = saldo?.unidad_base ?? 'mL';
+    return {
+      ok: true,
+      mensaje:
+        diferencia === 0
+          ? 'Conteo registrado: coincide con el sistema.'
+          : `Stock ajustado ${diferencia > 0 ? '+' : ''}${formatBase(diferencia, unidad)}.`,
+    };
+  });
+}
+
+// =============================================================================
+// Servicios
+// =============================================================================
+
+export async function registrarServicio(_previo: Estado, fd: FormData): Promise<Estado> {
+  return ejecutar(async () => {
+    const nombre = texto(fd, 'nombre');
+    const vehiculo = texto(fd, 'vehiculo');
+    const insumos = textos(fd, 'insumo_id');
+    const cantidades = enteros(fd, 'cantidad');
+    if (!nombre) return { ok: false, mensaje: 'Ingresá el nombre del servicio.' };
+    if (!vehiculo) return { ok: false, mensaje: 'Ingresá el tipo de vehículo.' };
+    if (insumos.length === 0 || insumos.some((i) => i === '')) {
+      return { ok: false, mensaje: 'Elegí el insumo de cada línea de la receta.' };
+    }
+    if (!cantidades || cantidades.length !== insumos.length) {
+      return { ok: false, mensaje: 'Cada insumo de la receta necesita una cantidad entera, mayor que 0.' };
+    }
+    const { error } = await crearClienteServidor().rpc('registrar_servicio', {
+      p_nombre: nombre,
+      p_tipo_vehiculo: vehiculo,
+      p_insumos: insumos,
+      p_cantidades: cantidades,
+      p_observacion: texto(fd, 'observacion'),
+    });
+    if (error) return mensajeAmigable(error);
+    revalidatePath('/', 'layout');
+    return { ok: true, mensaje: `Servicio «${nombre}» registrado y descontado del stock.` };
+  });
+}
+
+// =============================================================================
+// Catálogo · punto de pedido y baja lógica
+// =============================================================================
+
+export async function definirPuntoPedido(_previo: Estado, fd: FormData): Promise<Estado> {
+  return ejecutar(async () => {
+    const escrito = texto(fd, 'punto');
+    const punto = escrito === null ? null : leerEnteroPositivo(escrito);
+    if (escrito !== null && punto === null) {
+      return { ok: false, mensaje: 'El punto de pedido es un número entero mayor que 0 (o vacío para quitarlo).' };
+    }
+    const { error } = await crearClienteServidor().rpc('definir_punto_pedido', {
+      p_insumo_id: texto(fd, 'insumo_id'),
+      p_punto: punto,
+    });
+    if (error) return mensajeAmigable(error);
+    revalidatePath('/', 'layout');
+    return { ok: true, mensaje: punto === null ? 'Punto de pedido quitado.' : 'Punto de pedido guardado.' };
+  });
+}
+
+export async function cambiarEstadoInsumo(_previo: Estado, fd: FormData): Promise<Estado> {
+  return ejecutar(async () => {
+    const activo = texto(fd, 'activo') === 'true';
+    const { error } = await crearClienteServidor().rpc('cambiar_estado_insumo', {
+      p_insumo_id: texto(fd, 'insumo_id'),
+      p_activo: activo,
+    });
+    if (error) return mensajeAmigable(error);
+    revalidatePath('/', 'layout');
+    return { ok: true, mensaje: activo ? 'Insumo reactivado.' : 'Insumo dado de baja.' };
   });
 }
 
@@ -333,8 +446,8 @@ export async function compensarOperacion(_previo: Estado, fd: FormData): Promise
       p_operacion_id: texto(fd, 'operacion_id'),
       p_motivo: texto(fd, 'motivo'),
     });
-    if (error) return rechazo(error);
+    if (error) return mensajeAmigable(error);
     revalidatePath('/', 'layout');
-    return { ok: true, mensaje: 'Corrección registrada como movimiento de compensación.' };
+    return { ok: true, mensaje: 'Operación anulada: la corrección quedó registrada en el historial.' };
   });
 }

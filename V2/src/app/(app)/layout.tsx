@@ -1,9 +1,9 @@
 import { redirect } from 'next/navigation';
 import { cerrarSesion } from '@/app/acciones';
 import { MarcoAuth } from '@/components/MarcoAuth';
-import { Navegacion } from '@/components/Navegacion';
+import { Encabezado, Menu } from '@/components/Menu';
 import { textoRol } from '@/lib/cuentas';
-import { miembroActual } from '@/lib/datos';
+import { contarAlertas, miembroActual } from '@/lib/datos';
 import { usuarioActual } from '@/lib/supabase/servidor';
 
 export const dynamic = 'force-dynamic';
@@ -35,23 +35,15 @@ export default async function MarcoAplicacion({ children }: { children: React.Re
     );
   }
 
+  const alertas = await contarAlertas();
+
   return (
-    <>
-      <header className="cabecera">
-        <div className="cabecera-fila">
-          <span className="marca">DETAIL CONTROL</span>
-          <form action={cerrarSesion} className="sesion">
-            <span className="suave">
-              {miembro.nombre} · {textoRol(miembro.rol)}
-            </span>
-            <button type="submit" className="boton boton-secundario boton-chico">
-              Cerrar sesión
-            </button>
-          </form>
-        </div>
-        <Navegacion />
-      </header>
-      <main className="contenido">{children}</main>
-    </>
+    <div className="app">
+      <Menu nombre={miembro.nombre} rol={textoRol(miembro.rol)} alertas={alertas} />
+      <div className="area">
+        <Encabezado />
+        <main className="contenido">{children}</main>
+      </div>
+    </div>
   );
 }

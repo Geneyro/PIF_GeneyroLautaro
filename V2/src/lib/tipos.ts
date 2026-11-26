@@ -1,5 +1,5 @@
 export type UnidadBase = 'mL' | 'g';
-export type TipoMovimiento = 'INGRESO' | 'FRACCIONAMIENTO' | 'COMPENSACION';
+export type TipoMovimiento = 'INGRESO' | 'FRACCIONAMIENTO' | 'COMPENSACION' | 'AJUSTE' | 'CONSUMO';
 export type Compartimento = 'GRANEL' | 'PRESENTACION' | 'MERMA';
 export type RolUsuario = 'ADMINISTRADOR' | 'OPERARIO';
 
@@ -17,6 +17,9 @@ export interface SaldoInsumo {
   saldo_total: number;
   merma_acumulada: number;
   creado_en: string;
+  /** Saldo a granel por debajo del cual hay que reponer. Null: sin alerta. */
+  punto_pedido: number | null;
+  reponer: boolean;
 }
 
 /** Fila de la vista v_saldo_presentacion. */
@@ -53,6 +56,26 @@ export interface Movimiento {
   movimiento_origen_id: number | null;
   compensado: boolean;
   usuario_id: string;
+  usuario_nombre: string | null;
+  registrado_en: string;
+  servicio_nombre: string | null;
+  servicio_vehiculo: string | null;
+  conteo_fisico: number | null;
+  conteo_saldo_sistema: number | null;
+  /** Tipo de la línea compensada, en las compensaciones. */
+  tipo_origen: TipoMovimiento | null;
+}
+
+/** Fila de la vista v_conteo_fisico (Auditoría). */
+export interface ConteoFisico {
+  id: number;
+  insumo_id: string;
+  insumo_nombre: string;
+  unidad_base: UnidadBase;
+  saldo_sistema: number;
+  conteo: number;
+  diferencia: number;
+  observacion: string | null;
   usuario_nombre: string | null;
   registrado_en: string;
 }
