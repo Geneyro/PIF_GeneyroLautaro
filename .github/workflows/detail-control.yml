@@ -46,9 +46,17 @@ jobs:
         run: npm run typecheck
 
       # Supabase local dentro del runner: aplica todas las migraciones y el seed.
-      # Un reintento cubre las fallas pasajeras al descargar las imágenes.
+      # Hasta tres intentos, con pausa, cubren las fallas pasajeras al
+      # descargar las imágenes de Docker.
       - name: Levantar Supabase local (migraciones + datos de prueba)
-        run: npx supabase start || (npx supabase stop --no-backup || true; npx supabase start)
+        run: |
+          for intento in 1 2 3; do
+            if npx supabase start; then exit 0; fi
+            echo "::warning::Supabase local no arrancó (intento $intento de 3). Se reintenta."
+            npx supabase stop --no-backup || true
+            sleep $((intento * 20))
+          done
+          exit 1
 
       # Claves del Supabase local del runner: son valores de desarrollo que
       # genera la CLI, no secretos del proyecto. No se usa ningún secreto de GitHub.
